@@ -50,7 +50,9 @@ should_run_zen_commit() {
     local critical_patterns=()
 
     if [[ -f "$config_file" ]] && command -v jq >/dev/null 2>&1; then
-        mapfile -t critical_patterns < <(jq -r '.zen_commit.trigger_on.critical_files[]?' "$config_file" 2>/dev/null)
+        while IFS= read -r pattern; do
+            critical_patterns+=("$pattern")
+        done < <(jq -r '.zen_commit.trigger_on.critical_files[]?' "$config_file" 2>/dev/null)
     fi
 
     # Default patterns if config not available
