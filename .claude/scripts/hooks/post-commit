@@ -1,0 +1,54 @@
+#!/bin/bash
+#
+# Post-commit Hook - Trigger Auto-Sync After Every Commit
+# Zero-command automation: detects progress and syncs to GitHub automatically
+#
+
+set -euo pipefail
+
+# Get the directory of the git repository
+REPO_ROOT=$(git rev-parse --show-toplevel)
+CCPM_SCRIPTS="$REPO_ROOT/.claude/scripts"
+AUTO_SYNC_ENGINE="$CCMP_SCRIPTS/auto-sync-engine.sh"
+
+# Ensure auto-sync engine exists
+if [[ ! -f "$AUTO_SYNC_ENGINE" ]]; then
+    echo "Auto-sync engine not found: $AUTO_SYNC_ENGINE" >&2
+    exit 0
+fi
+
+# Make sure the script is executable
+chmod +x "$AUTO_SYNC_ENGINE"
+
+# Log the commit that triggered this hook
+echo "[POST-COMMIT] $(date): Commit $(git rev-parse --short HEAD) by $(git config user.name)" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+
+# Get the commit message for analysis
+COMMIT_MSG=$(git log -1 --pretty=%B)
+
+# Check for completion keywords in commit message
+COMPLETION_KEYWORDS=("complete" "finish" "done" "implement" "fix" "feat")
+FORCE_SYNC=false
+
+for keyword in "${COMPLETION_KEYWORDS[@]}"; do
+    if echo "$COMMIT_MSG" | grep -q -i "$keyword"; then
+        FORCE_SYNC=true
+        break
+    fi
+done
+
+# Always run auto-sync, but log if triggered by completion keywords
+if [[ "$FORCE_SYNC" == "true" ]]; then
+    echo "[POST-COMMIT] Completion keyword detected in commit message, triggering auto-sync" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+fi
+
+# Run auto-sync in background to avoid slowing down commits
+{
+    cd "$REPO_ROOT"
+    "$AUTO_SYNC_ENGINE" auto-sync
+} &
+
+# Don't wait for auto-sync to complete - let it run in background
+echo "[POST-COMMIT] Auto-sync triggered in background" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+
+exit 0

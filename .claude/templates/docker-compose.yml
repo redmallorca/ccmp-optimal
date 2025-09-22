@@ -1,0 +1,205 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://appuser:${POSTGRES_PASSWORD}@db:5432/appdb
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - app-network
+      - proxy-network
+    restart: unless-stopped
+    labels:
+      # Caddy Proxy Labels
+      - "caddy=${APP_DOMAIN:-app.example.com}"
+      - "caddy.reverse_proxy={{upstreams 3000}}"
+      - "caddy.tls=internal"
+      - "caddy.encode=gzip"
+      - "caddy.header.Strict-Transport-Security=max-age=31536000; includeSubDomains"
+      - "caddy.header.X-Content-Type-Options=nosniff"
+      - "caddy.header.X-Frame-Options=DENY"
+      - "caddy.header.X-XSS-Protection=1; mode=block"
+
+      # Traefik Proxy Labels (alternative to Caddy)
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy-network"
+      - "traefik.http.routers.${APP_NAME:-app}.rule=Host(`${APP_DOMAIN:-app.example.com}`)"
+      - "traefik.http.routers.${APP_NAME:-app}.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${APP_NAME:-app}.middlewares=security-headers,gzip"
+      - "traefik.http.services.${APP_NAME:-app}.loadbalancer.server.port=3000"
+
+      # Security middleware
+      - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.security-headers.headers.frameOptions=DENY"
+      - "traefik.http.middlewares.security-headers.headers.browserXssFilter=true"
+
+      # Compression middleware
+      - "traefik.http.middlewares.gzip.compress=true"
+
+      # Coolify Platform Labels
+      - "coolify.managed=true"
+      - "coolify.name=${APP_NAME:-main-app}"
+      - "coolify.port=3000"
+      - "coolify.domain=${APP_DOMAIN:-app.example.com}"
+      - "coolify.redirect=true"
+      - "coolify.generate.domain=false"
+      - "coolify.healthcheck.enabled=true"
+      - "coolify.healthcheck.path=/health"
+      - "coolify.healthcheck.interval=30s"
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-appdb}
+      - POSTGRES_USER=${POSTGRES_USER:-appuser}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-appdb}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - app-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      # Backup labels for automated backups
+      - "backup.enable=true"
+      - "backup.database=postgresql"
+      - "backup.schedule=0 2 * * *"  # Daily at 2 AM
+
+  redis:
+    image: redis:7-alpine
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - redis_prod_data:/data
+      - ./config/redis-prod.conf:/usr/local/etc/redis/redis.conf:ro
+    command: >
+      sh -c "
+        if [ -n '$$REDIS_PASSWORD' ]; then
+          redis-server /usr/local/etc/redis/redis.conf --requirepass $$REDIS_PASSWORD
+        else
+          redis-server /usr/local/etc/redis/redis.conf
+        fi
+      "
+    healthcheck:
+      test: >
+        sh -c "
+          if [ -n '$$REDIS_PASSWORD' ]; then
+            redis-cli -a $$REDIS_PASSWORD ping
+          else
+            redis-cli ping
+          fi
+        "
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - app-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  # Optional: Production database backups
+  db-backup:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-appdb}
+      - POSTGRES_USER=${POSTGRES_USER:-appuser}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+      - BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-0 2 * * *}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    command: >
+      sh -c "
+        echo '$$BACKUP_SCHEDULE /backup.sh' > /var/spool/cron/crontabs/root &&
+        crond -f
+      "
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+    profiles:
+      - backup
+
+  # Optional: Log aggregation
+  log-aggregator:
+    image: fluent/fluent-bit:latest
+    volumes:
+      - ./config/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+    profiles:
+      - logging
+
+volumes:
+  postgres_prod_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/postgres
+  redis_prod_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/redis
+
+networks:
+  app-network:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+  proxy-network:
+    external: true
+    # This network should be created by your proxy (Caddy/Traefik/Coolify)
+    # docker network create proxy-network
+
+# Production profiles usage:
+# docker-compose up -d                           # Core services only
+# docker-compose --profile backup up -d          # With automated backups
+# docker-compose --profile logging up -d         # With log aggregation
+# docker-compose --profile backup --profile logging up -d  # Full production stack
+
+# Environment variables required:
+# - POSTGRES_PASSWORD (required)
+# - REDIS_PASSWORD (recommended)
+# - APP_DOMAIN (required for proxy)
+# - APP_NAME (required for proxy)
+# - DATA_PATH (optional, defaults to ./data)

@@ -1,0 +1,69 @@
+#!/bin/bash
+#
+# Pre-push Hook - Final Sync Before Push
+# Ensures GitHub is synchronized before pushing to remote
+#
+
+set -euo pipefail
+
+# Get the directory of the git repository
+REPO_ROOT=$(git rev-parse --show-toplevel)
+CCPM_SCRIPTS="$REPO_ROOT/.claude/scripts"
+AUTO_SYNC_ENGINE="$CCPM_SCRIPTS/auto-sync-engine.sh"
+
+# Ensure auto-sync engine exists
+if [[ ! -f "$AUTO_SYNC_ENGINE" ]]; then
+    echo "Auto-sync engine not found: $AUTO_SYNC_ENGINE" >&2
+    exit 0
+fi
+
+# Make sure the script is executable
+chmod +x "$AUTO_SYNC_ENGINE"
+
+# Log the push attempt
+echo "[PRE-PUSH] $(date): Preparing to push $(git rev-parse --abbrev-ref HEAD)" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+
+# Get current epic
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+EPIC_NAME=""
+
+# Extract epic name from branch
+if [[ "$CURRENT_BRANCH" =~ ^feature/(.+)$ ]]; then
+    EPIC_NAME="${BASH_REMATCH[1]}"
+elif [[ "$CURRENT_BRANCH" =~ ^epic/(.+)$ ]]; then
+    EPIC_NAME="${BASH_REMATCH[1]}"
+fi
+
+# Only sync if on an epic branch
+if [[ -z "$EPIC_NAME" ]]; then
+    echo "[PRE-PUSH] Not on an epic branch, skipping sync" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+    exit 0
+fi
+
+# Check if epic directory exists
+EPIC_DIR="$REPO_ROOT/.claude/epics/$EPIC_NAME"
+if [[ ! -d "$EPIC_DIR" ]]; then
+    echo "[PRE-PUSH] Epic directory not found: $EPIC_DIR" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+    exit 0
+fi
+
+echo "[PRE-PUSH] Syncing epic before push: $EPIC_NAME" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+
+# Run final sync before push
+cd "$REPO_ROOT"
+"$AUTO_SYNC_ENGINE" auto-sync
+
+# Get completion percentage to determine if PR should be created
+COMPLETION_PERCENT=$("$AUTO_SYNC_ENGINE" completion "$EPIC_NAME")
+
+echo "[PRE-PUSH] Epic $EPIC_NAME completion: ${COMPLETION_PERCENT}%" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+
+# If 100% complete, create PR (if not already exists)
+if [[ "$COMPLETION_PERCENT" -eq 100 ]]; then
+    echo "[PRE-PUSH] Epic complete, ensuring PR exists with auto-merge label" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+    "$AUTO_SYNC_ENGINE" create-pr "$EPIC_NAME" "$COMPLETION_PERCENT"
+fi
+
+echo "[PRE-PUSH] Sync complete for epic: $EPIC_NAME" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+
+exit 0
