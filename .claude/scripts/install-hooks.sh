@@ -15,7 +15,7 @@ echo "🔧 Installing CCPM git hooks for zero-command automation..."
 
 # Ensure hooks directory exists
 mkdir -p "$GIT_HOOKS_DIR"
-mkdir -p "$CCMP_HOOKS_DIR"
+mkdir -p "$CCPM_HOOKS_DIR"
 
 # Create logs directory
 mkdir -p "$REPO_ROOT/.claude/logs"

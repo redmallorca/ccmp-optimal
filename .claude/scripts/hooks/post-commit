@@ -9,7 +9,7 @@ set -euo pipefail
 # Get the directory of the git repository
 REPO_ROOT=$(git rev-parse --show-toplevel)
 CCPM_SCRIPTS="$REPO_ROOT/.claude/scripts"
-AUTO_SYNC_ENGINE="$CCMP_SCRIPTS/auto-sync-engine.sh"
+AUTO_SYNC_ENGINE="$CCPM_SCRIPTS/auto-sync-engine.sh"
 
 # Ensure auto-sync engine exists
 if [[ ! -f "$AUTO_SYNC_ENGINE" ]]; then
