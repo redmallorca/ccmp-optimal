@@ -16,6 +16,37 @@ CONFIG_FILE="$CCPM_DIR/config.json"
 mkdir -p "$LOGS_DIR"
 LOG_FILE="$LOGS_DIR/auto-sync.log"
 
+# Load configuration from config.json
+load_config() {
+    if [[ -f "$CONFIG_FILE" ]]; then
+        # Check if jq is available
+        if command -v jq >/dev/null 2>&1; then
+            DELIVERABLE_PATTERNS=$(jq -r '.deliverables.patterns[]' "$CONFIG_FILE" 2>/dev/null || echo "")
+            QUALITY_GATES_LINT=$(jq -r '.quality_gates.lint' "$CONFIG_FILE" 2>/dev/null || echo "true")
+            QUALITY_GATES_TEST=$(jq -r '.quality_gates.test' "$CONFIG_FILE" 2>/dev/null || echo "true")
+            QUALITY_GATES_BUILD=$(jq -r '.quality_gates.build' "$CONFIG_FILE" 2>/dev/null || echo "true")
+            AUTO_MERGE_ENABLED=$(jq -r '.github.auto_merge' "$CONFIG_FILE" 2>/dev/null || echo "true")
+            TARGET_BRANCH=$(jq -r '.github.target_branch' "$CONFIG_FILE" 2>/dev/null || echo "main")
+        else
+            log "Warning: jq not found, using default configuration"
+            DELIVERABLE_PATTERNS=""
+            QUALITY_GATES_LINT="true"
+            QUALITY_GATES_TEST="true"
+            QUALITY_GATES_BUILD="true"
+            AUTO_MERGE_ENABLED="true"
+            TARGET_BRANCH="main"
+        fi
+    else
+        log "Warning: config.json not found, using default configuration"
+        DELIVERABLE_PATTERNS=""
+        QUALITY_GATES_LINT="true"
+        QUALITY_GATES_TEST="true"
+        QUALITY_GATES_BUILD="true"
+        AUTO_MERGE_ENABLED="true"
+        TARGET_BRANCH="main"
+    fi
+}
+
 # Logging function
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
@@ -43,42 +74,103 @@ get_current_epic() {
 check_deliverable() {
     local file="$1"
 
-    # File must exist and be non-empty
-    if [[ -f "$file" && -s "$file" ]]; then
-        # Additional validation based on file type
-        case "$file" in
-            *.vue|*.astro|*.tsx|*.jsx)
-                # Component files should have reasonable content
-                if [[ $(wc -l < "$file") -gt 5 ]]; then
-                    echo "true"
-                else
-                    echo "false"
-                fi
-                ;;
-            *.test.js|*.test.ts|*.spec.js|*.spec.ts)
-                # Test files should contain actual tests
-                if grep -q -E "(test|it|describe|expect)" "$file"; then
-                    echo "true"
-                else
-                    echo "false"
-                fi
-                ;;
-            *.md)
-                # Documentation should have reasonable content
-                if [[ $(wc -l < "$file") -gt 3 ]]; then
-                    echo "true"
-                else
-                    echo "false"
-                fi
-                ;;
-            *)
-                # Default: file exists and non-empty
-                echo "true"
-                ;;
-        esac
-    else
+    # File must exist and be readable
+    if [[ ! -f "$file" ]]; then
         echo "false"
+        return
     fi
+
+    # File must be non-empty
+    if [[ ! -s "$file" ]]; then
+        echo "false"
+        return
+    fi
+
+    # Enhanced validation based on file type and content
+    case "$file" in
+        *.vue|*.astro|*.tsx|*.jsx)
+            # Component files should have meaningful content
+            local line_count=$(wc -l < "$file")
+            if [[ $line_count -lt 5 ]]; then
+                echo "false"
+                return
+            fi
+            # Check for basic component structure
+            if grep -q -E "(export|template|script|<)" "$file"; then
+                echo "true"
+            else
+                echo "false"
+            fi
+            ;;
+        *.test.js|*.test.ts|*.spec.js|*.spec.ts)
+            # Test files should contain actual tests
+            if grep -q -E "(test|it|describe|expect|assert)" "$file"; then
+                # Ensure test file has meaningful content
+                local test_count=$(grep -c -E "(test|it)\(" "$file")
+                if [[ $test_count -gt 0 ]]; then
+                    echo "true"
+                else
+                    echo "false"
+                fi
+            else
+                echo "false"
+            fi
+            ;;
+        *.md)
+            # Documentation should have reasonable content and structure
+            local line_count=$(wc -l < "$file")
+            if [[ $line_count -lt 3 ]]; then
+                echo "false"
+                return
+            fi
+            # Check for basic markdown structure
+            if grep -q -E "(^#|^\*|^-|^[0-9]+\.)" "$file"; then
+                echo "true"
+            else
+                echo "false"
+            fi
+            ;;
+        *.js|*.ts)
+            # JavaScript/TypeScript files should have meaningful content
+            local line_count=$(wc -l < "$file")
+            if [[ $line_count -lt 3 ]]; then
+                echo "false"
+                return
+            fi
+            # Check for basic JS/TS structure
+            if grep -q -E "(function|const|let|var|class|export|import)" "$file"; then
+                echo "true"
+            else
+                echo "false"
+            fi
+            ;;
+        *.json)
+            # JSON files should be valid JSON
+            if command -v jq >/dev/null 2>&1; then
+                if jq . "$file" >/dev/null 2>&1; then
+                    echo "true"
+                else
+                    echo "false"
+                fi
+            else
+                # Fallback: basic JSON structure check
+                if grep -q -E "^\s*[{\[]" "$file" && grep -q -E "[}\]]\s*$" "$file"; then
+                    echo "true"
+                else
+                    echo "false"
+                fi
+            fi
+            ;;
+        *)
+            # Default: file exists, non-empty, and has reasonable content
+            local line_count=$(wc -l < "$file")
+            if [[ $line_count -gt 0 ]]; then
+                echo "true"
+            else
+                echo "false"
+            fi
+            ;;
+    esac
 }
 
 # Calculate epic completion percentage
@@ -408,6 +500,9 @@ auto_sync() {
 
     log "Auto-sync complete for epic: $epic_name"
 }
+
+# Load configuration
+load_config
 
 # Command line interface
 case "${1:-auto-sync}" in
