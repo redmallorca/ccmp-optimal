@@ -4,6 +4,23 @@
     "github_integration": true,
     "supermemory_integration": true
   },
+  "zen_commit": {
+    "enabled": true,
+    "auto_validate": true,
+    "trigger_on": {
+      "file_count_threshold": 3,
+      "critical_files": [
+        ".claude/scripts/*",
+        "*.json",
+        "*.config.*",
+        "*hooks*",
+        "package.json",
+        "tsconfig.json",
+        "*.env*"
+      ],
+      "commit_types": ["feat", "breaking", "major", "refactor", "security"]
+    }
+  },
   "deliverables": {
     "patterns": [
       "src/components/*.{vue,astro,tsx,jsx}",

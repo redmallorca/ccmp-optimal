@@ -1,0 +1,104 @@
+#!/bin/bash
+# ABOUTME: Pre-commit hook for zen validation on important commits
+# Automatically runs zen commit validation for commits meeting certain criteria
+
+set -euo pipefail
+
+# Get the directory of the git repository
+REPO_ROOT=$(git rev-parse --show-toplevel)
+CCPM_SCRIPTS="$REPO_ROOT/.claude/scripts"
+
+# Log the commit attempt
+mkdir -p "$REPO_ROOT/.claude/logs"
+echo "[PRE-COMMIT] $(date): Validating commit with zen..." >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+
+# Load zen commit configuration
+load_zen_config() {
+    local config_file="$REPO_ROOT/.claude/config.json"
+
+    if [[ -f "$config_file" ]] && command -v jq >/dev/null 2>&1; then
+        ZEN_ENABLED=$(jq -r '.zen_commit.enabled // true' "$config_file")
+        ZEN_AUTO_VALIDATE=$(jq -r '.zen_commit.auto_validate // true' "$config_file")
+        ZEN_FILE_THRESHOLD=$(jq -r '.zen_commit.trigger_on.file_count_threshold // 3' "$config_file")
+    else
+        # Defaults
+        ZEN_ENABLED="true"
+        ZEN_AUTO_VALIDATE="true"
+        ZEN_FILE_THRESHOLD="3"
+    fi
+}
+
+# Check if this is an important commit that needs zen validation
+should_run_zen_commit() {
+    # Check if zen commit is enabled
+    if [[ "$ZEN_ENABLED" != "true" ]]; then
+        return 1
+    fi
+
+    # Get staged files
+    local staged_files=$(git diff --cached --name-only)
+    local staged_count=$(echo "$staged_files" | wc -l)
+
+    # Run zen commit if more files than threshold
+    if [[ $staged_count -gt $ZEN_FILE_THRESHOLD ]]; then
+        echo "Large commit ($staged_count files > $ZEN_FILE_THRESHOLD) - zen validation required"
+        return 0
+    fi
+
+    # Check for critical file patterns (load from config if available)
+    local config_file="$REPO_ROOT/.claude/config.json"
+    local critical_patterns=()
+
+    if [[ -f "$config_file" ]] && command -v jq >/dev/null 2>&1; then
+        mapfile -t critical_patterns < <(jq -r '.zen_commit.trigger_on.critical_files[]?' "$config_file" 2>/dev/null)
+    fi
+
+    # Default patterns if config not available
+    if [[ ${#critical_patterns[@]} -eq 0 ]]; then
+        critical_patterns=(".claude/scripts/*" "*.json" "*.config.*" "*hooks*" "package.json" "tsconfig.json" "*.env*")
+    fi
+
+    # Check each staged file against critical patterns
+    while IFS= read -r file; do
+        for pattern in "${critical_patterns[@]}"; do
+            if [[ "$file" == $pattern ]]; then
+                echo "Critical file modified ($file matches $pattern) - zen validation required"
+                return 0
+            fi
+        done
+    done <<< "$staged_files"
+
+    return 1
+}
+
+# Load configuration
+load_zen_config
+
+# Check if zen validation is needed
+if should_run_zen_commit; then
+    echo "[PRE-COMMIT] Running zen commit validation..." >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+
+    # Run zen commit validation using wrapper script
+    ZEN_WRAPPER="$CCPM_SCRIPTS/zen-commit-wrapper.sh"
+    if [[ -f "$ZEN_WRAPPER" ]]; then
+        echo "🔍 Running zen commit validation..."
+
+        if "$ZEN_WRAPPER"; then
+            echo "✅ Zen validation passed"
+        else
+            echo "❌ Zen validation failed - commit blocked"
+            echo "[PRE-COMMIT] Zen validation failed - blocking commit" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+            exit 1
+        fi
+    else
+        echo "⚠️  Zen wrapper not found: $ZEN_WRAPPER"
+        echo "   Proceeding without zen validation"
+    fi
+
+    echo "[PRE-COMMIT] Zen validation completed" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+else
+    echo "[PRE-COMMIT] Simple commit - skipping zen validation" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+fi
+
+echo "[PRE-COMMIT] Validation complete, proceeding with commit" >> "$REPO_ROOT/.claude/logs/auto-sync.log"
+exit 0

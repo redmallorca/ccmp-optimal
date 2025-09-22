@@ -30,6 +30,16 @@ else
     echo "   ⚠️  Post-commit hook not found in $CCPM_HOOKS_DIR"
 fi
 
+# Install pre-commit hook (zen validation)
+if [[ -f "$CCPM_HOOKS_DIR/pre-commit" ]]; then
+    echo "🔍 Installing pre-commit hook (zen validation)..."
+    cp "$CCPM_HOOKS_DIR/pre-commit" "$GIT_HOOKS_DIR/pre-commit"
+    chmod +x "$GIT_HOOKS_DIR/pre-commit"
+    echo "   ✅ Pre-commit hook installed"
+else
+    echo "   ⚠️  Pre-commit hook not found in $CCPM_HOOKS_DIR"
+fi
+
 # Install pre-push hook
 if [[ -f "$CCPM_HOOKS_DIR/pre-push" ]]; then
     echo "🚀 Installing pre-push hook..."
