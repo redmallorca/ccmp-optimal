@@ -203,15 +203,19 @@ calculate_completion() {
 
                 # Check if deliverable pattern matches existing files
                 local found_files=()
-                mapfile -t found_files < <(find . -name "$pattern" -type f 2>/dev/null)
+                while IFS= read -r -d '' file; do
+                    found_files+=("$file")
+                done < <(find . -name "$pattern" -type f -print0 2>/dev/null)
                 local deliverable_complete="false"
 
-                for file in "${found_files[@]}"; do
-                    if [[ $(check_deliverable "$file") == "true" ]]; then
-                        deliverable_complete="true"
-                        break
-                    fi
-                done
+                if [[ ${#found_files[@]} -gt 0 ]]; then
+                    for file in "${found_files[@]}"; do
+                        if [[ $(check_deliverable "$file") == "true" ]]; then
+                            deliverable_complete="true"
+                            break
+                        fi
+                    done
+                fi
 
                 if [[ "$deliverable_complete" == "true" ]]; then
                     ((completed_required++))
@@ -235,7 +239,9 @@ calculate_completion() {
 
         for pattern in "${patterns[@]}"; do
             local files=()
-            mapfile -t files < <(find . -name "$pattern" -type f 2>/dev/null)
+            while IFS= read -r -d '' file; do
+                files+=("$file")
+            done < <(find . -name "$pattern" -type f -print0 2>/dev/null)
             if [[ ${#files[@]} -gt 0 ]]; then
                 for file in "${files[@]}"; do
                     if [[ $(check_deliverable "$file") == "true" ]]; then
