@@ -1,173 +1,151 @@
-# /pm:status - Epic Progress Check
+# status - Epic Progress Check
 
-**Usage**: `/pm:status [epic-name]`
+**Usage**: `status [epic-name]`
+**Script**: `.claude/scripts/status.sh [epic-name]`
 
-## Purpose
+## ORDERS FOR status.sh EXECUTION
 
-Display current epic progress, deliverable status, and next actions without any automation triggers.
-
-## What It Does
-
-### 1. Progress Analysis
-- Calculate completion percentage based on file existence
-- Check deliverable quality (file size, basic validation)
-- Analyze recent commit activity
-- Review GitHub sync status
-
-### 2. Deliverable Status Check
+### STEP 1: Parse Arguments
 ```bash
-# File-based completion detection
-for deliverable in "${deliverables[@]}"; do
-  if [[ -f "$deliverable" && -s "$deliverable" ]]; then
-    echo "✅ $deliverable (completed)"
-  else
-    echo "📋 $deliverable (pending)"
-  fi
-done
+epic_name="${1:-}"
+if [[ "$epic_name" == "--help" || "$epic_name" == "-h" ]]; then
+  show_help; exit 0
+fi
 ```
 
-### 3. GitHub Integration Status
-- Issue tracking synchronization
-- PR readiness assessment
-- Auto-merge eligibility
-- CI/CD pipeline status
+### STEP 2: Check if Specific Epic or All Epics
+```bash
+if [[ -n "$epic_name" ]]; then
+  show_epic_status "$epic_name"
+else
+  show_all_epics
+fi
+```
 
-## Status Report Format
+### STEP 3: Calculate Completion (for specific epic)
+```bash
+deliverables_file=".claude/epics/$epic_name/deliverables.json"
+total_deliverables=$(jq -r '.deliverables | length' "$deliverables_file")
+completed=0
 
-### Epic Overview
-```markdown
-## Epic Status: user-auth
+# Check each deliverable file exists and non-empty
+while IFS= read -r pattern; do
+  if [[ -f "$pattern" && -s "$pattern" ]]; then
+    ((completed++))
+  fi
+done < <(jq -r '.deliverables[].pattern' "$deliverables_file")
 
-📊 **Progress**: 67% complete (4/6 deliverables)
-🌿 **Branch**: feature/user-auth
-🔗 **GitHub Issue**: #123 (last updated 2 hours ago)
-⏰ **Last Activity**: 2 hours ago
+percentage=$((completed * 100 / total_deliverables))
+```
+
+### STEP 4: Display Epic Information
+```bash
+# Show essential epic data
+echo "## Epic Status: $epic_name"
+echo "📊 Progress: ${percentage}% complete"
+echo "📝 Description: $(jq -r '.description' "$deliverables_file")"
+echo "🔗 GitHub Issue: #$(jq -r '.github_issue' "$deliverables_file")"
+
+# Show git branch status
+current_branch=$(git branch --show-current)
+expected_branch="feature/epic-$epic_name"
+if [[ "$current_branch" == "$expected_branch" ]]; then
+  echo "🌿 Branch: $current_branch (active)"
+else
+  echo "🌿 Branch: $expected_branch (not active, current: $current_branch)"
+fi
+```
+
+### STEP 5: List Deliverables Status
+```bash
+echo "### Deliverable Status"
+while IFS= read -r deliverable; do
+  pattern=$(echo "$deliverable" | jq -r '.pattern')
+  required=$(echo "$deliverable" | jq -r '.required // false')
+  description=$(echo "$deliverable" | jq -r '.description // ""')
+
+  if [[ -f "$pattern" && -s "$pattern" ]]; then
+    echo "- ✅ $pattern (completed)"
+  else
+    req_text=""
+    if [[ "$required" == "true" ]]; then
+      req_text=" (required)"
+    else
+      req_text=" (optional)"
+    fi
+    echo "- 📋 $pattern (pending)$req_text"
+  fi
+
+  if [[ -n "$description" ]]; then
+    echo "     $description"
+  fi
+done < <(jq -c '.deliverables[]' "$deliverables_file")
+```
+
+### STEP 6: Show Next Actions
+```bash
+echo "### Next Actions"
+if [[ "$percentage" -eq 100 ]]; then
+  echo "🎉 Epic ready for completion!"
+  echo "   Run: close $epic_name"
+else
+  echo "🎯 Complete remaining deliverables"
+  github_issue=$(jq -r '.github_issue // "null"' "$deliverables_file")
+  if [[ "$github_issue" == "null" || "$github_issue" == "" ]]; then
+    echo "⚠️  Create GitHub issue for tracking"
+  fi
+  if [[ "$current_branch" != "$expected_branch" ]]; then
+    echo "🌿 Switch to epic branch: git checkout $expected_branch"
+  fi
+fi
+```
+
+## RULES TO FOLLOW
+
+### Auto-Sync Rules (from .claude/rules/auto-sync.md)
+- **File-based completion**: Check deliverable files exist and non-empty
+- **Real-time status**: No caching, always check current file state
+- **Progress calculation**: completed_files / total_files * 100
+
+### Git Workflow Rules (from .claude/rules/git-workflow.md)
+- **Branch detection**: Check if on correct `feature/epic-$epic_name` branch
+- **Status indicators**: Show branch active/inactive status
+
+## OUTPUT FORMAT
+
+### For Single Epic
+```
+## Epic Status: epic-name
+📊 Progress: 67% complete
+📝 Description: Epic description
+🔗 GitHub Issue: #123
+🌿 Branch: feature/epic-epic-name (active)
 
 ### Deliverable Status
-
-#### ✅ Completed (4/6)
-- ✅ src/components/LoginForm.vue (2.1KB, 3 commits)
-- ✅ src/services/AuthService.ts (1.8KB, 5 commits)
-- ✅ tests/auth.test.js (3.2KB, 2 commits)
-- ✅ src/middleware/auth.ts (0.9KB, 1 commit)
-
-#### 📋 Pending (2/6)
-- 📋 src/pages/login.astro (required)
-- 📋 docs/auth-guide.md (optional)
-
-### Quality Status
-- 🟢 Tests: All passing (12/12)
-- 🟢 Lint: No issues
-- 🟢 TypeScript: No errors
-- 🟢 Build: Successful
+- ✅ src/component.vue (completed)
+     Main component implementation
+- 📋 tests/test.js (pending) (required)
+     Test coverage for component
 
 ### Next Actions
-1. 🎯 Create src/pages/login.astro (blocking auto-merge)
-2. 📝 Add auth documentation (optional)
-3. 🔄 Auto-merge will trigger at 100% completion
+🎯 Complete remaining deliverables
 ```
 
-### Branch & Git Status
-```bash
-# Git information
-Current branch: feature/user-auth
-Commits ahead of main: 7
-Last commit: feat(auth): add JWT token validation (2 hours ago)
-Working directory: Clean
+### For All Epics
+```
+## Active Epics Overview
 
-# Sync status
-GitHub issue: #123 synchronized
-Last progress update: 2 hours ago
-Auto-sync: ✅ Active
+### epic-1 (100% complete)
+   Epic description here
+
+### epic-2 (50% complete)
+   Epic description here
+
+Total active epics: 2
 ```
 
-### CI/CD Pipeline Status
-```bash
-# Quality gates
-✅ Lint check: Passing
-✅ TypeScript: No errors
-✅ Unit tests: 12/12 passing
-✅ Build: Successful
-📋 E2E tests: Will run on PR creation
-
-# Auto-merge readiness
-🔄 Waiting for: src/pages/login.astro completion
-✅ CI/CD: Ready
-✅ Branch protection: Configured
-✅ Auto-merge: Enabled when ready
-```
-
-## Multi-Epic Status
-
-### Active Epics Overview
-```bash
-# When no epic specified, show all active
-/pm:status
-
-## Active Epics (3)
-
-### 🟢 user-auth (67% complete)
-- Branch: feature/user-auth
-- Last activity: 2 hours ago
-- Next: Complete login page
-
-### 🟡 bike-gallery (34% complete)
-- Branch: feature/bike-gallery
-- Last activity: 1 day ago
-- Next: Image optimization component
-
-### 🔴 payment-integration (12% complete)
-- Branch: feature/payment-integration
-- Last activity: 3 days ago
-- Next: Stripe API integration
-```
-
-### Repository Health
-```bash
-# Overall project status
-Main branch: ✅ All tests passing
-Dependency security: ✅ No vulnerabilities
-Performance: ✅ Lighthouse score 94/100
-Auto-merge: ✅ 3 PRs merged this week
-```
-
-## Integration Points
-
-### Memory Systems
-- **Supermemory**: Load epic context and decisions
-- **Serena**: Analyze deliverable file quality
-- **GitHub API**: Sync status and issue updates
-
-### Analysis Tools
-- **Code Analyzer**: File quality assessment
-- **Simple Tester**: Test coverage analysis
-- **Security Specialist**: Security deliverable review
-
-## Example Usage
-
-```bash
-# Check specific epic
-/pm:status user-auth
-
-# Check all active epics
-/pm:status
-
-# Silent check (for automation)
-/pm:status --quiet user-auth
-```
-
-## Automation Integration
-
-### Non-Intrusive Monitoring
-- Status checks don't trigger any automation
-- Pure read-only operation
-- Safe for frequent polling
-- No side effects on git or GitHub
-
-### Automation Hooks
-- Status data used by auto-sync system
-- Progress calculation for PR creation
-- Completion detection for auto-merge
-- Quality gate validation
-
-**Quick, comprehensive epic status without triggering any automation. Perfect for checking progress and planning next steps.**
+## ERROR HANDLING
+- Check if `.claude/epics` directory exists
+- Validate epic exists before showing details
+- Handle missing deliverables.json gracefully
+- Show clear error for non-existent epics
