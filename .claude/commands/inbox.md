@@ -1,239 +1,221 @@
-# /pm:inbox - External Issues Inbox Management
+# inbox - External Issues Management
 
-**Purpose**: Review, adopt, or ignore external GitHub issues and pull requests detected by the sync system.
+**Usage**: `inbox [list|show|adopt|ignore|stats] [issue-number]`
+**Script**: `.claude/scripts/inbox.sh [command] [options]`
 
-## Usage
+## ORDERS FOR inbox.sh EXECUTION
 
+### STEP 1: Parse Arguments and Validate
 ```bash
-/pm:inbox [command] [options]
+command="${1:-list}"
+issue_number="$2"
+
+case "$command" in
+  list|show|adopt|ignore|stats) ;;
+  *) echo "Error: Invalid command. Use: list, show, adopt, ignore, stats"; exit 1 ;;
+esac
+
+[[ "$command" == "show" || "$command" == "adopt" || "$command" == "ignore" ]] && [[ -z "$issue_number" ]] && {
+  echo "Error: Issue number required for $command"; exit 1;
+}
 ```
 
-## Commands
-
-### List Pending Issues (Default)
+### STEP 2: Initialize Inbox Directory
 ```bash
-/pm:inbox
-/pm:inbox list
+inbox_dir=".claude/inbox"
+issues_file="$inbox_dir/external-issues.jsonl"
+
+mkdir -p "$inbox_dir"
+[[ ! -f "$issues_file" ]] && touch "$issues_file"
 ```
 
-Shows all external issues with `pending` status waiting for review.
-
-### Show Issue Details
+### STEP 3: Execute Command Functions
 ```bash
-/pm:inbox show <issue-number>
+case "$command" in
+  list) list_pending_issues ;;
+  show) show_issue_details "$issue_number" ;;
+  adopt) adopt_issue "$issue_number" ;;
+  ignore) ignore_issue "$issue_number" ;;
+  stats) show_inbox_stats ;;
+esac
 ```
 
-Display comprehensive information about a specific external issue.
-
-### Adopt External Issue
+### STEP 4: List Pending Issues (Default)
 ```bash
-/pm:inbox adopt <issue-number>
+list_pending_issues() {
+  echo "=== PENDING EXTERNAL ISSUES ==="
+  echo ""
+
+  pending_count=0
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+
+    status=$(echo "$line" | jq -r '.status')
+    [[ "$status" != "pending" ]] && continue
+
+    number=$(echo "$line" | jq -r '.number')
+    title=$(echo "$line" | jq -r '.title')
+    author=$(echo "$line" | jq -r '.author')
+    created_at=$(echo "$line" | jq -r '.created_at')
+    url=$(echo "$line" | jq -r '.url')
+    is_pr=$(echo "$line" | jq -r '.is_pull_request')
+
+    type_label="Issue"
+    [[ "$is_pr" == "true" ]] && type_label="Pull Request"
+
+    echo "#$number - $type_label"
+    echo "  📝 $title"
+    echo "  👤 By: $author"
+    echo "  📅 Created: $created_at"
+    echo "  🔗 $url"
+    echo ""
+
+    ((pending_count++))
+  done < "$issues_file"
+
+  [[ "$pending_count" -eq 0 ]] && echo "No pending external issues found."
+  echo "Total pending: $pending_count"
+}
 ```
 
-Mark an external issue as adopted for manual integration into your development workflow.
-
-### Ignore External Issue
+### STEP 5: Show Issue Details
 ```bash
-/pm:inbox ignore <issue-number>
+show_issue_details() {
+  local issue_num="$1"
+
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+
+    number=$(echo "$line" | jq -r '.number')
+    [[ "$number" != "$issue_num" ]] && continue
+
+    echo "=== Issue #$issue_num ==="
+    echo ""
+    echo "📝 Title: $(echo "$line" | jq -r '.title')"
+    echo "👤 Author: $(echo "$line" | jq -r '.author')"
+    echo "📅 Created: $(echo "$line" | jq -r '.created_at')"
+    echo "🔄 Updated: $(echo "$line" | jq -r '.updated_at')"
+    echo "🎯 Status: $(echo "$line" | jq -r '.status')"
+    echo "🔗 URL: $(echo "$line" | jq -r '.url')"
+
+    is_pr=$(echo "$line" | jq -r '.is_pull_request')
+    [[ "$is_pr" == "true" ]] && echo "📋 Type: Pull Request" || echo "📋 Type: Issue"
+
+    return 0
+  done < "$issues_file"
+
+  echo "Error: Issue #$issue_num not found in inbox"
+  exit 1
+}
 ```
 
-Mark an external issue as ignored/not relevant to current development priorities.
-
-### Show Statistics
+### STEP 6: Adopt or Ignore Issues
 ```bash
-/pm:inbox stats
+adopt_issue() {
+  local issue_num="$1"
+  update_issue_status "$issue_num" "adopted" "marked as adopted for manual integration"
+}
+
+ignore_issue() {
+  local issue_num="$1"
+  update_issue_status "$issue_num" "ignored" "marked as ignored/not relevant"
+}
+
+update_issue_status() {
+  local issue_num="$1"
+  local new_status="$2"
+  local action_desc="$3"
+
+  temp_file=$(mktemp)
+  found=false
+
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+
+    number=$(echo "$line" | jq -r '.number')
+    if [[ "$number" == "$issue_num" ]]; then
+      # Update status and timestamp
+      updated_line=$(echo "$line" | jq --arg status "$new_status" --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '.status = $status | .updated_at = $timestamp')
+      echo "$updated_line" >> "$temp_file"
+      found=true
+    else
+      echo "$line" >> "$temp_file"
+    fi
+  done < "$issues_file"
+
+  if [[ "$found" == "true" ]]; then
+    mv "$temp_file" "$issues_file"
+    echo "[SUCCESS] Issue #$issue_num $action_desc"
+  else
+    rm "$temp_file"
+    echo "Error: Issue #$issue_num not found in inbox"
+    exit 1
+  fi
+}
 ```
 
-Display inbox statistics including total, pending, adopted, and ignored issues.
-
-## Implementation
-
-Executes: `.claude/scripts/inbox-manager.sh [command] [options]`
-
-## Workflow
-
-### 1. Detection Phase
+### STEP 7: Show Statistics
 ```bash
-/pm:sync  # Detect external issues via GitHub API polling
+show_inbox_stats() {
+  echo "=== INBOX STATISTICS ==="
+
+  total=0
+  pending=0
+  adopted=0
+  ignored=0
+
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+
+    status=$(echo "$line" | jq -r '.status')
+    ((total++))
+
+    case "$status" in
+      pending) ((pending++)) ;;
+      adopted) ((adopted++)) ;;
+      ignored) ((ignored++)) ;;
+    esac
+  done < "$issues_file"
+
+  echo "📊 Total external issues: $total"
+  echo "⏳ Pending review: $pending"
+  echo "✅ Adopted: $adopted"
+  echo "❌ Ignored: $ignored"
+}
 ```
 
-### 2. Review Phase
-```bash
-/pm:inbox  # List pending external issues
-```
+## RULES TO FOLLOW
 
-**Example Output**:
+### Auto-Sync Rules (from .claude/rules/auto-sync.md)
+- **External detection**: Issues detected by github-sync.sh based on author_association
+- **No auto-actions**: Never automatically create epics or adopt issues
+- **Manual decisions**: All adoptions require explicit user action
+
+### Git Workflow Rules (from .claude/rules/git-workflow.md)
+- **External reference**: Include original issue URL in epic descriptions
+- **Manual integration**: Use standard /pm:new after adoption
+- **Standard workflow**: Adopted issues follow normal CCPM process
+
+## ARGUMENTS
+- `command`: list, show, adopt, ignore, stats (default: list)
+- `issue-number`: Required for show, adopt, ignore commands
+
+## ERROR HANDLING
+- Validate command arguments before processing
+- Check if external-issues.jsonl exists and is readable
+- Handle missing issue numbers gracefully
+- Never leave JSONL file in corrupted state
+
+## SUCCESS OUTPUT
 ```
 === PENDING EXTERNAL ISSUES ===
 
 #42 - Issue
   📝 Add dark mode toggle
   👤 By: external_user
-  🏷️  Repo: myorg/myproject
   📅 Created: 2025-09-23T14:30:00Z
   🔗 https://github.com/myorg/myproject/issues/42
 
-#43 - Pull Request
-  📝 Fix typo in documentation
-  👤 By: contributor
-  🏷️  Repo: myorg/myproject
-  📅 Created: 2025-09-23T15:15:00Z
-  🔗 https://github.com/myorg/myproject/pull/43
+Total pending: 1
 ```
-
-### 3. Decision Phase
-```bash
-/pm:inbox show 42      # Review details
-/pm:inbox adopt 42     # Adopt for implementation
-# OR
-/pm:inbox ignore 43    # Ignore as not relevant
-```
-
-### 4. Integration Phase
-After adopting an external issue:
-
-1. **Manual Epic Creation**: Create a new epic or add to existing epic
-2. **GitHub Issue Link**: Include external issue URL in epic description
-3. **Deliverable Planning**: Plan implementation in epic deliverables
-4. **Development**: Implement using standard CCPM workflow
-
-## Issue Status Flow
-
-```
-[DETECTED] → [PENDING] → [ADOPTED] or [IGNORED]
-     ↑           ↑           ↑            ↑
-  github-sync  /pm:inbox  /pm:inbox   /pm:inbox
-                 list      adopt       ignore
-```
-
-## External Issue Classification
-
-Issues are considered "external" based on GitHub `author_association`:
-
-**External** (detected):
-- `NONE` - No association with repository
-- `FIRST_TIME_CONTRIBUTOR` - First contribution
-- `CONTRIBUTOR` - Previous contributor, not team member
-
-**Internal** (ignored):
-- `OWNER` - Repository owner
-- `MEMBER` - Organization member
-- `COLLABORATOR` - Repository collaborator
-
-## Data Storage
-
-### External Issues Database
-**File**: `.claude/inbox/external-issues.jsonl`
-
-**Format**:
-```json
-{
-  "repository": "myorg/myproject",
-  "number": 42,
-  "title": "Add dark mode toggle",
-  "url": "https://github.com/myorg/myproject/issues/42",
-  "author": "external_user",
-  "created_at": "2025-09-23T14:30:00Z",
-  "updated_at": "2025-09-23T14:30:00Z",
-  "is_pull_request": false,
-  "status": "pending",
-  "detected_at": "2025-09-23T20:00:00Z"
-}
-```
-
-### Status Values
-- `pending` - Awaiting review and decision
-- `adopted` - Marked for manual integration
-- `ignored` - Marked as not relevant
-
-## Interactive Features
-
-### Adoption Confirmation
-```bash
-$ /pm:inbox adopt 42
-
-=== Issue #42 ===
-
-📝 Title: Add dark mode toggle
-👤 Author: external_user
-🏷️  Repository: myorg/myproject
-📅 Created: 2025-09-23T14:30:00Z
-🔄 Updated: 2025-09-23T14:30:00Z
-🎯 Status: pending
-🔗 URL: https://github.com/myorg/myproject/issues/42
-
-This will mark issue #42 as 'adopted' for manual integration.
-You should manually create a corresponding GitHub issue or epic.
-
-Continue? (y/N): y
-[SUCCESS] Issue #42 marked as adopted
-
-[WARNING] Next steps:
-1. Create GitHub issue/epic for this external request
-2. Link external issue URL in your epic description
-3. Plan implementation in your epic deliverables
-```
-
-### Statistics Dashboard
-```bash
-$ /pm:inbox stats
-
-=== INBOX STATISTICS ===
-📊 Total external issues: 5
-⏳ Pending review: 2
-✅ Adopted: 2
-❌ Ignored: 1
-```
-
-## Integration with CCPM
-
-### Manual Integration Required
-- **No Automatic Actions**: System never automatically creates epics or issues
-- **User-Driven Workflow**: All decisions require explicit user action
-- **Manual Epic Creation**: Use standard `/pm:new` after adoption
-- **External Reference**: Include original issue URL in epic description
-
-### Example Integration Workflow
-```bash
-# 1. Detect external issues
-/pm:sync
-
-# 2. Review external request
-/pm:inbox show 42
-
-# 3. Adopt relevant issue
-/pm:inbox adopt 42
-
-# 4. Create epic for implementation
-/pm:new external-dark-mode
-
-# 5. Reference external issue in epic description
-# "Implement dark mode toggle as requested in https://github.com/myorg/myproject/issues/42"
-
-# 6. Plan deliverables for implementation
-# 7. Develop using standard CCPM workflow
-```
-
-## Troubleshooting
-
-**No external issues showing**:
-- Run `/pm:sync` first to detect external issues
-- Check if any issues were created by non-team members
-- Verify GitHub token permissions
-
-**Issues not updating**:
-- Check `.claude/inbox/external-issues.jsonl` file permissions
-- Verify JSON file is not corrupted
-- Re-run detection with `/pm:sync`
-
-**Command not found**:
-- Ensure `.claude/scripts/inbox-manager.sh` exists and is executable
-- Check CCPM installation
-
-## Files Used
-
-- `.claude/inbox/external-issues.jsonl` - External issues database
-- `.claude/scripts/inbox-manager.sh` - Inbox management script
-- `.claude/logs/github-sync.log` - Detection and operation logs
-
-**User-driven external issue management. Review stakeholder requests and adopt relevant ones for implementation.**

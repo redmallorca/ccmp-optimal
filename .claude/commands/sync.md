@@ -1,208 +1,212 @@
-# /pm:sync - Force GitHub Synchronization
+# sync - Force GitHub Synchronization
 
-**Usage**: `/pm:sync [epic-name]`
+**Usage**: `sync [epic-name]`
+**Script**: `.claude/scripts/sync.sh [epic-name]`
 
-## Purpose
+## ORDERS FOR sync.sh EXECUTION
 
-Manually trigger GitHub synchronization when auto-sync fails or immediate update is needed.
-
-## What It Does
-
-### 1. Progress Calculation
-- Recalculate deliverable completion percentage
-- Validate file existence and quality
-- Update internal progress tracking
-- Prepare sync payload
-
-### 2. GitHub API Sync
+### STEP 1: Parse Arguments
 ```bash
-# Issue update with progress
-POST /repos/owner/repo/issues/{issue_number}/comments
-{
-  "body": "## Epic Progress Update\n\n**Progress**: 67% complete (4/6 deliverables)\n\n### Completed ✅\n- LoginForm component\n- AuthService implementation\n- Test coverage\n- Auth middleware\n\n### Remaining 📋\n- Login page\n- Documentation\n\n_Auto-updated by CCPM system_"
+epic_name="${1:-}"
+force_sync=false
+validate_only=false
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --all) sync_all=true; shift ;;
+    --force) force_sync=true; shift ;;
+    --validate) validate_only=true; shift ;;
+    --help|-h) show_help; exit 0 ;;
+    *) epic_name="$1"; shift ;;
+  esac
+done
+```
+
+### STEP 2: Validate Environment
+```bash
+# Check GitHub CLI authentication
+gh auth status || { echo "Error: GitHub CLI not authenticated"; exit 1; }
+
+# Get repository info
+repository=$(git remote get-url origin | sed 's|.*github.com[/:]||; s|\.git$||')
+
+# Check if in git repository
+git rev-parse --git-dir >/dev/null 2>&1 || { echo "Error: Not in git repository"; exit 1; }
+```
+
+### STEP 3: Calculate Epic Progress
+```bash
+calculate_progress() {
+  local epic_dir="$1"
+  local deliverables_file="$epic_dir/deliverables.json"
+
+  total=$(jq -r '.deliverables | length' "$deliverables_file")
+  completed=0
+
+  while IFS= read -r pattern; do
+    if [[ -f "$pattern" && -s "$pattern" ]]; then
+      ((completed++))
+    fi
+  done < <(jq -r '.deliverables[].pattern' "$deliverables_file")
+
+  percentage=$((completed * 100 / total))
+  echo "$completed $total $percentage"
 }
 ```
 
-### 3. Milestone Sync
-- Update milestone progress
-- Sync due dates if configured
-- Link related issues
-- Update project boards
+### STEP 4: Generate Progress Comment
+```bash
+generate_comment() {
+  local epic_name="$1"
+  local completed="$2"
+  local total="$3"
+  local percentage="$4"
 
-### 4. PR Management
-- Create PR if deliverables complete
-- Update PR description with progress
-- Add/remove auto-merge labels
-- Sync branch protection status
-
-## Sync Operations
-
-### Issue Comment Updates
-```markdown
+  cat << EOF
 ## Epic Progress Update
 
-**Progress**: 67% complete (4/6 deliverables)
+**Progress**: ${percentage}% complete (${completed}/${total} deliverables)
 **Last Updated**: $(date)
-**Branch**: feature/user-auth
+**Branch**: feature/epic-${epic_name}
 
 ### ✅ Completed Deliverables
-- src/components/LoginForm.vue
-- src/services/AuthService.ts
-- tests/auth.test.js
-- src/middleware/auth.ts
+EOF
+
+  # List completed deliverables
+  while IFS= read -r pattern; do
+    if [[ -f "$pattern" && -s "$pattern" ]]; then
+      echo "- $pattern"
+    fi
+  done < <(jq -r '.deliverables[].pattern' "$epic_dir/deliverables.json")
+
+  cat << EOF
 
 ### 📋 Remaining Deliverables
-- src/pages/login.astro (required)
-- docs/auth-guide.md (optional)
+EOF
 
-### Quality Status
-- 🟢 Tests: All passing (12/12)
-- 🟢 Lint: No issues
-- 🟢 Build: Successful
+  # List pending deliverables
+  while IFS= read -r deliverable; do
+    pattern=$(echo "$deliverable" | jq -r '.pattern')
+    required=$(echo "$deliverable" | jq -r '.required // false')
+    if [[ ! -f "$pattern" || ! -s "$pattern" ]]; then
+      req_text=""
+      [[ "$required" == "true" ]] && req_text=" (required)" || req_text=" (optional)"
+      echo "- $pattern$req_text"
+    fi
+  done < <(jq -c '.deliverables[]' "$epic_dir/deliverables.json")
 
-### Next Steps
-- Complete login page implementation
-- Auto-merge will trigger at 100% completion
-
-_Auto-updated by CCPM system_
+  echo ""
+  echo "_Auto-updated by CCPM sync system_"
+}
 ```
 
-### PR Auto-Creation
+### STEP 5: Update GitHub Issue
 ```bash
-# When deliverables reach 100%
-gh pr create \
-  --title "feat(user-auth): Complete user authentication system" \
-  --body "$(generate_pr_description)" \
-  --label "auto-merge" \
-  --base main \
-  --head feature/user-auth
+sync_epic() {
+  local epic_name="$1"
+  local epic_dir=".claude/epics/$epic_name"
+  local deliverables_file="$epic_dir/deliverables.json"
+
+  # Get GitHub issue number
+  issue_number=$(jq -r '.github_issue // "null"' "$deliverables_file")
+  if [[ "$issue_number" == "null" || "$issue_number" == "" ]]; then
+    echo "⚠️  Epic $epic_name has no GitHub issue to sync"
+    return 1
+  fi
+
+  # Calculate progress
+  read completed total percentage < <(calculate_progress "$epic_dir")
+
+  # Generate and post comment
+  comment=$(generate_comment "$epic_name" "$completed" "$total" "$percentage")
+  gh issue comment "$issue_number" --body "$comment" --repo "$repository"
+
+  echo "✅ Synced epic $epic_name to GitHub issue #$issue_number (${percentage}% complete)"
+}
 ```
 
-### Label Management
+### STEP 6: Create PR if Ready
 ```bash
-# Dynamic label assignment
-labels=("auto-merge")
+create_pr_if_ready() {
+  local epic_name="$1"
+  local percentage="$2"
 
-if [[ $completion_percent -eq 100 ]]; then
-  labels+=("ready-for-merge")
+  if [[ "$percentage" -eq 100 ]]; then
+    branch_name="feature/epic-$epic_name"
+
+    # Check if PR already exists
+    existing_pr=$(gh pr list --head "$branch_name" --repo "$repository" --json number --jq '.[0].number // ""')
+
+    if [[ -z "$existing_pr" ]]; then
+      # Create PR
+      pr_number=$(gh pr create \
+        --title "feat($epic_name): Complete epic implementation" \
+        --body "Epic $epic_name completed - all deliverables ready" \
+        --label "auto-merge" \
+        --base main \
+        --head "$branch_name" \
+        --repo "$repository" | grep -o '#[0-9]\+' | tr -d '#')
+
+      echo "🚀 Created PR #$pr_number for completed epic $epic_name"
+    else
+      echo "📋 PR #$existing_pr already exists for epic $epic_name"
+    fi
+  fi
+}
+```
+
+### STEP 7: Execute Sync
+```bash
+if [[ "$sync_all" == "true" ]]; then
+  # Sync all epics
+  for epic_dir in .claude/epics/*; do
+    if [[ -d "$epic_dir" ]]; then
+      epic_name=$(basename "$epic_dir")
+      sync_epic "$epic_name"
+    fi
+  done
+elif [[ -n "$epic_name" ]]; then
+  # Sync specific epic
+  if [[ -d ".claude/epics/$epic_name" ]]; then
+    sync_epic "$epic_name"
+    read completed total percentage < <(calculate_progress ".claude/epics/$epic_name")
+    create_pr_if_ready "$epic_name" "$percentage"
+  else
+    echo "Error: Epic '$epic_name' not found"
+    exit 1
+  fi
+else
+  echo "Error: Specify epic name or use --all"
+  exit 1
 fi
-
-if [[ $has_breaking_changes == "true" ]]; then
-  labels+=("breaking-change")
-  # Remove auto-merge for manual review
-  labels=("${labels[@]/auto-merge}")
-fi
-
-gh issue edit $issue_number --add-label "${labels[*]}"
 ```
 
-## Sync Validation
+## RULES TO FOLLOW
 
-### Pre-Sync Checks
-```bash
-# Validate sync prerequisites
-✅ GitHub API token valid
-✅ Issue exists and accessible
-✅ Repository permissions sufficient
-✅ Branch exists and pushed
-✅ No merge conflicts
+### Auto-Sync Rules (from .claude/rules/auto-sync.md)
+- **Manual override**: Manual sync doesn't interfere with auto-sync
+- **Shared sync lock**: Prevent conflicts with automated syncing
+- **Progress calculation**: Same logic as auto-sync for consistency
+
+### Git Workflow Rules (from .claude/rules/git-workflow.md)
+- **PR creation**: Auto-create PR when deliverables 100% complete
+- **Auto-merge label**: Add label for automatic merging
+- **Branch naming**: Consistent with `feature/epic-$epic_name`
+
+## ARGUMENTS
+- `epic-name`: Sync specific epic (optional)
+- `--all`: Sync all active epics
+- `--force`: Force sync even if no changes detected
+- `--validate`: Validate sync configuration only
+
+## ERROR HANDLING
+- Check GitHub authentication before any API calls
+- Validate epic exists before attempting sync
+- Handle API rate limits gracefully
+- Never leave GitHub state inconsistent
+
+## SUCCESS OUTPUT
 ```
-
-### Post-Sync Verification
-```bash
-# Confirm sync success
-✅ Issue comment posted
-✅ Progress updated
-✅ Labels synchronized
-✅ Milestone linked
-✅ PR created (if applicable)
+✅ Synced epic user-auth to GitHub issue #123 (67% complete)
+🚀 Created PR #456 for completed epic user-auth
 ```
-
-### Error Handling
-```bash
-# Common sync failures
-❌ GitHub API rate limit → Retry with backoff
-❌ Network timeout → Retry operation
-❌ Permission denied → Log error, continue
-❌ Issue not found → Recreate issue link
-❌ Branch conflicts → Block auto-merge
-```
-
-## Manual Sync Triggers
-
-### When to Use Manual Sync
-- Auto-sync appears stuck or delayed
-- Immediate GitHub update needed
-- Testing sync configuration
-- Recovering from sync failures
-- Demonstrating progress to stakeholders
-
-### Bulk Sync Operations
-```bash
-# Sync all active epics
-/pm:sync --all
-
-# Sync specific project epics
-/pm:sync --project bike-app
-
-# Force sync with validation
-/pm:sync epic-name --force --validate
-```
-
-## Integration Points
-
-### Auto-Sync Coordination
-- Manual sync doesn't interfere with auto-sync
-- Shared sync lock prevents conflicts
-- Updates auto-sync state after manual sync
-- Preserves auto-sync schedule
-
-### Quality Gates
-- Sync includes quality gate status
-- CI/CD pipeline status reported
-- Test results included in sync
-- Security scan results attached
-
-### Memory Systems
-- **Supermemory**: Store sync decisions and patterns
-- **Serena**: Analyze files for sync validation
-- **GitHub**: Issue and PR state management
-
-## Example Usage
-
-```bash
-# Sync specific epic
-/pm:sync user-auth
-
-# Output:
-# 🔄 Syncing epic: user-auth
-# 📊 Progress: 67% complete (4/6 deliverables)
-# 📝 Updating GitHub issue #123...
-# ✅ Issue comment posted
-# 🏷️ Labels updated: auto-merge (pending completion)
-# 📋 PR creation: Waiting for 100% completion
-#
-# Sync complete! ✅
-
-# Force sync all epics
-/pm:sync --all --force
-
-# Validate sync configuration
-/pm:sync --validate
-```
-
-## Automation Recovery
-
-### Sync Failure Recovery
-- Manual sync can recover from auto-sync failures
-- Clears sync error states
-- Re-establishes GitHub API connections
-- Validates and repairs sync configuration
-
-### Consistency Maintenance
-- Ensures GitHub state matches local state
-- Reconciles differences between systems
-- Updates stale progress tracking
-- Repairs broken auto-sync triggers
-
-**Reliable manual override for GitHub synchronization. Use when auto-sync needs assistance or immediate updates are required.**

@@ -1,0 +1,33 @@
+{
+  "epic": "fix-pm-new",
+  "description": "Fix critical bug in Claude Code /pm:new command that prevents epic creation and GitHub issue integration",
+  "deliverables": [
+    {
+      "type": "investigation",
+      "pattern": ".claude/epics/fix-pm-new/investigation.md",
+      "required": true,
+      "description": "Complete investigation of /pm:new command failure"
+    },
+    {
+      "type": "workaround",
+      "pattern": ".claude/scripts/manual-epic-creator.sh",
+      "required": true,
+      "description": "Temporary script to create epics manually with GitHub integration"
+    },
+    {
+      "type": "bug-report",
+      "pattern": ".claude/epics/fix-pm-new/bug-report.md",
+      "required": true,
+      "description": "Detailed bug report for Claude Code team"
+    },
+    {
+      "type": "documentation",
+      "pattern": ".claude/epics/fix-pm-new/solution.md",
+      "required": false,
+      "description": "Solution documentation and prevention measures"
+    }
+  ],
+  "github_issue": null,
+  "repository": "redmallorca/ccmp-optimal",
+  "auto_sync_enabled": true
+}

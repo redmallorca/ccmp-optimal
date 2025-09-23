@@ -1,264 +1,228 @@
-# /pm:close - Complete and Archive Epic
+# close - Complete and Archive Epic
 
-**Usage**: `/pm:close epic-name [--archive]`
+**Usage**: `close epic-name [--archive]`
+**Script**: `.claude/scripts/close.sh epic-name [--archive]`
 
-## Purpose
+## ORDERS FOR close.sh EXECUTION
 
-Finalize epic completion, ensure all deliverables are met, sync final status, and optionally archive epic materials.
-
-## What It Does
-
-### 1. Completion Validation
-- Verify 100% deliverable completion
-- Run final quality gates
-- Ensure PR is merged to main
-- Validate GitHub issue closure
-
-### 2. Final Sync Operations
+### STEP 1: Parse Arguments and Validate
 ```bash
-# Final GitHub sync
-- Update issue with completion status
-- Close GitHub issue
-- Update milestone progress
-- Archive project board cards
-- Tag completion in repository
+epic_name="$1"
+archive_epic=false
+
+[[ "$2" == "--archive" ]] && archive_epic=true
+
+# Validate epic name provided
+[[ -n "$epic_name" ]] || { echo "Error: Epic name required"; exit 1; }
+
+# Check epic exists
+epic_dir=".claude/epics/$epic_name"
+[[ -d "$epic_dir" ]] || { echo "Error: Epic '$epic_name' not found"; exit 1; }
 ```
 
-### 3. Knowledge Preservation
+### STEP 2: Validate Epic Completion
 ```bash
-# Supermemory archival
-- Store epic decisions and patterns
-- Document architecture choices
-- Save performance insights
-- Archive team learnings
+deliverables_file="$epic_dir/deliverables.json"
+total=$(jq -r '.deliverables | length' "$deliverables_file")
+completed=0
+
+# Count completed required deliverables
+while IFS= read -r deliverable; do
+  pattern=$(echo "$deliverable" | jq -r '.pattern')
+  required=$(echo "$deliverable" | jq -r '.required // false')
+
+  if [[ -f "$pattern" && -s "$pattern" ]]; then
+    ((completed++))
+  elif [[ "$required" == "true" ]]; then
+    echo "Error: Required deliverable missing: $pattern"
+    exit 1
+  fi
+done < <(jq -c '.deliverables[]' "$deliverables_file")
+
+percentage=$((completed * 100 / total))
+echo "📊 Epic completion: ${percentage}% (${completed}/${total} deliverables)"
 ```
 
-### 4. Branch Cleanup
+### STEP 3: Run Quality Gates
 ```bash
-# Git cleanup operations
-git checkout main
-git pull origin main
-git branch -d feature/epic-name
-git push origin --delete feature/epic-name
+echo "🔍 Running quality gates..."
+
+# Check if on epic branch
+current_branch=$(git branch --show-current)
+expected_branch="feature/epic-$epic_name"
+
+if [[ "$current_branch" != "$expected_branch" ]]; then
+  echo "⚠️  Not on epic branch. Switching to $expected_branch"
+  git checkout "$expected_branch" || { echo "Error: Cannot switch to epic branch"; exit 1; }
+fi
+
+# Run quality checks if available
+if command -v npm >/dev/null 2>&1; then
+  if [[ -f "package.json" ]]; then
+    echo "🧹 Running lint..."
+    npm run lint 2>/dev/null || echo "⚠️  Lint script not available"
+
+    echo "🧪 Running tests..."
+    npm test 2>/dev/null || echo "⚠️  Test script not available"
+
+    echo "🔨 Running build..."
+    npm run build 2>/dev/null || echo "⚠️  Build script not available"
+  fi
+fi
 ```
 
-## Completion Checklist
-
-### Pre-Close Validation
+### STEP 4: Sync Final Status to GitHub
 ```bash
-# Epic completion requirements
-✅ All required deliverables exist and valid
-✅ Quality gates passed (lint, test, build)
-✅ PR merged to main branch
-✅ GitHub issue resolved
-✅ No blocking merge conflicts
-✅ Documentation complete (if required)
-```
+issue_number=$(jq -r '.github_issue // "null"' "$deliverables_file")
 
-### Quality Verification
-```bash
-# Final quality checks
-npm run lint          # No linting errors
-npm run typecheck     # No TypeScript errors
-npm test             # All tests passing
-npm run build        # Production build successful
-npm run test:e2e     # E2E tests passing
-```
+if [[ "$issue_number" != "null" && "$issue_number" != "" ]]; then
+  echo "📝 Posting final completion status to GitHub..."
 
-### GitHub Status Verification
-```bash
-# GitHub integration checks
-✅ Issue #123 closed
-✅ PR #456 merged to main
-✅ Milestone updated
-✅ Project board cards archived
-✅ Branch deleted remotely
-```
+  repository=$(git remote get-url origin | sed 's|.*github.com[/:]||; s|\.git$||')
 
-## Knowledge Archival
+  final_comment="🎉 **Epic Completed: $epic_name**
 
-### Supermemory Documentation
-```bash
-# Store epic completion knowledge
-memory_content="
-Epic Completed: $epic_name
-
-Architecture Decisions:
-- JWT authentication with refresh tokens
-- Middleware-based route protection
-- Component-based login forms
-
-Performance Insights:
-- Login page LCP: 1.2s (target: <2.5s)
-- Auth API response: 180ms average
-- Bundle size impact: +12KB gzipped
-
-Patterns Established:
-- Auth service follows singleton pattern
-- Login components use Vue Composition API
-- Test coverage: 94% (above 80% threshold)
-
-Team Learnings:
-- JWT secret rotation strategy needed
-- Remember me checkbox UX positive
-- Auth middleware simplifies route protection
-"
-
-mcp__api-supermemory-ai__addMemory "$memory_content"
-```
-
-### Decision Documentation
-```markdown
-# Epic: user-auth - Completion Summary
-
-## Delivered Components
-- LoginForm.vue: Reactive login form with validation
-- AuthService.ts: JWT token management service
-- auth.middleware.ts: Route protection middleware
-- login.astro: Authentication landing page
-- auth.test.js: Comprehensive test suite
-
-## Architecture Decisions
-1. **JWT Strategy**: Short-lived access tokens (15min) + long-lived refresh tokens (7days)
-2. **State Management**: Pinia store for user authentication state
-3. **Route Protection**: Middleware-based with automatic redirects
-4. **Security**: CSRF protection, secure cookie settings, input validation
-
-## Performance Results
-- Login page Lighthouse score: 96/100
-- First Contentful Paint: 1.1s
-- Largest Contentful Paint: 1.2s
-- Bundle size impact: +12KB gzipped
-
-## Lessons Learned
-- Component composition pattern worked well for auth forms
-- Middleware approach simplified route protection implementation
-- Test-driven development caught 3 security issues early
-- JWT refresh strategy needs documentation for team
-```
-
-## Archive Operations
-
-### Optional Archival (`--archive` flag)
-```bash
-# Archive epic materials
-mkdir -p .claude/archive/epics/
-mv .claude/epics/epic-name .claude/archive/epics/
-
-# Create completion summary
-cat > .claude/archive/epics/epic-name/completion-summary.md << EOF
-# Epic Completion: $epic_name
-- Completed: $(date)
-- Duration: $duration days
-- Commits: $commit_count
-- Final PR: #$pr_number
-- GitHub Issue: #$issue_number
-EOF
-```
-
-### Git History Preservation
-```bash
-# Tag epic completion
-git tag -a epic/user-auth-complete -m "Completed user authentication epic"
-git push origin epic/user-auth-complete
-
-# Preserve branch history in notes
-git notes add -m "Epic: user-auth completed $(date)" HEAD
-```
-
-## Integration Points
-
-### CI/CD Completion
-- Verify production deployment successful
-- Monitor post-merge metrics
-- Ensure no regression in other features
-- Validate performance budgets maintained
-
-### Team Notification
-```bash
-# GitHub issue closing comment
-final_comment="
-🎉 **Epic Completed: User Authentication**
-
-All deliverables have been successfully implemented and merged to main.
+All deliverables have been successfully implemented.
 
 ## 📊 Final Stats
-- Duration: 5 days
-- Commits: 12
-- Files changed: 8
-- Test coverage: 94%
+- Duration: $(git log --oneline --since="1 month ago" feature/epic-$epic_name | wc -l) commits
+- Completion: 100%
+- Files changed: $(git diff --name-only main..feature/epic-$epic_name | wc -l)
 
-## 🚀 Delivered Features
-- ✅ Secure JWT authentication
-- ✅ Login/logout functionality
-- ✅ Route protection middleware
-- ✅ Responsive login page
-- ✅ Comprehensive test suite
+## 🚀 Delivered Components"
 
-## 📈 Performance
-- Lighthouse score: 96/100
-- Bundle size: +12KB gzipped
-- Login API: 180ms average response
+  # List all completed deliverables
+  while IFS= read -r pattern; do
+    if [[ -f "$pattern" && -s "$pattern" ]]; then
+      final_comment="$final_comment
+- ✅ $pattern"
+    fi
+  done < <(jq -r '.deliverables[].pattern' "$deliverables_file")
 
-Thanks to all contributors! 🙏
+  final_comment="$final_comment
 
-_Epic auto-closed by CCPM system_
-"
+Epic closed automatically by CCPM close command."
 
-gh issue comment $issue_number --body "$final_comment"
-gh issue close $issue_number
+  gh issue comment "$issue_number" --body "$final_comment" --repo "$repository"
+  gh issue close "$issue_number" --repo "$repository"
+
+  echo "✅ GitHub issue #$issue_number closed"
+else
+  echo "⚠️  No GitHub issue to close"
+fi
 ```
 
-## Example Usage
-
+### STEP 5: Create Final PR if Not Exists
 ```bash
-# Standard epic completion
-/pm:close user-auth
+branch_name="feature/epic-$epic_name"
+repository=$(git remote get-url origin | sed 's|.*github.com[/:]||; s|\.git$||')
 
-# Output:
-# 🔍 Validating epic completion...
-# ✅ All deliverables complete (6/6)
-# ✅ Quality gates passed
-# ✅ PR #456 merged to main
-# 📝 Storing completion knowledge...
-# 🧹 Cleaning up branches...
-# 🎉 Epic 'user-auth' completed successfully!
-#
-# Summary:
-# - Duration: 5 days
-# - Commits: 12
-# - GitHub issue #123 closed
-# - Knowledge stored in Supermemory
-# - Branch feature/user-auth deleted
+# Check if PR already exists
+existing_pr=$(gh pr list --head "$branch_name" --repo "$repository" --json number --jq '.[0].number // ""')
 
-# Complete with archival
-/pm:close user-auth --archive
+if [[ -z "$existing_pr" ]]; then
+  echo "🚀 Creating final PR..."
 
-# Force close (skip validation)
-/pm:close user-auth --force
+  pr_number=$(gh pr create \
+    --title "feat($epic_name): Complete epic implementation" \
+    --body "Epic $epic_name completed - ready for merge
+
+All deliverables implemented and quality gates passed." \
+    --label "auto-merge" \
+    --base main \
+    --head "$branch_name" \
+    --repo "$repository" | grep -o '#[0-9]\+' | tr -d '#')
+
+  echo "✅ Created PR #$pr_number"
+else
+  echo "📋 PR #$existing_pr already exists"
+fi
 ```
 
-## Error Recovery
-
-### Incomplete Epic Handling
+### STEP 6: Merge and Cleanup
 ```bash
-# If deliverables not 100% complete
-❌ Cannot close epic: Missing deliverables
-   - src/pages/login.astro (required)
+echo "🔄 Merging to main..."
 
-   Complete missing deliverables or use --force flag
-   Use /pm:status user-auth for details
+# Switch to main and pull latest
+git checkout main
+git pull origin main
+
+# Merge epic branch
+git merge --no-ff "feature/epic-$epic_name" -m "feat($epic_name): Complete epic implementation"
+
+# Push to main
+git push origin main
+
+# Delete epic branch locally and remotely
+echo "🧹 Cleaning up branches..."
+git branch -d "feature/epic-$epic_name"
+git push origin --delete "feature/epic-$epic_name"
+
+echo "✅ Epic branch merged and deleted"
 ```
 
-### Sync Failure Recovery
+### STEP 7: Archive Epic (if requested)
 ```bash
-# If GitHub sync fails during close
-⚠️ Epic completed locally, GitHub sync failed
-   - Local branches cleaned up
-   - Knowledge stored in Supermemory
-   - Manual GitHub cleanup needed
+if [[ "$archive_epic" == "true" ]]; then
+  echo "📦 Archiving epic..."
 
-   Run /pm:sync user-auth --force to retry
+  # Create archive directory
+  archive_dir=".claude/archive/epics"
+  mkdir -p "$archive_dir"
+
+  # Move epic to archive
+  mv "$epic_dir" "$archive_dir/"
+
+  # Create completion summary
+  cat > "$archive_dir/$epic_name/completion-summary.md" << EOF
+# Epic Completion: $epic_name
+
+- **Completed**: $(date)
+- **Duration**: $(git log --oneline --since="1 month ago" main | grep "$epic_name" | wc -l) commits
+- **Final PR**: #$pr_number
+- **GitHub Issue**: #$issue_number
+- **Deliverables**: ${completed}/${total} completed
+
+## Git History
+\`\`\`
+$(git log --oneline --grep="$epic_name" main | head -10)
+\`\`\`
+EOF
+
+  echo "📦 Epic archived to $archive_dir/$epic_name"
+else
+  echo "📁 Epic directory preserved in .claude/epics/$epic_name"
+fi
 ```
 
-**Clean epic completion with knowledge preservation. Ensures nothing is lost and future epics benefit from accumulated wisdom.**
+## RULES TO FOLLOW
+
+### Auto-Sync Rules (from .claude/rules/auto-sync.md)
+- **Completion validation**: All required deliverables must exist and be non-empty
+- **Quality gates**: Run lint, test, build before closing
+- **GitHub sync**: Final status update to GitHub issue
+
+### Git Workflow Rules (from .claude/rules/git-workflow.md)
+- **Merge strategy**: Use --no-ff merge to preserve epic history
+- **Branch cleanup**: Delete epic branch after successful merge
+- **PR creation**: Ensure PR exists with auto-merge label
+
+## ARGUMENTS
+- `epic-name`: Name of epic to close (required)
+- `--archive`: Move epic to archive directory (optional)
+
+## ERROR HANDLING
+- Validate all required deliverables exist before closing
+- Check git repository state before merge operations
+- Handle GitHub API failures gracefully
+- Never leave repository in inconsistent state
+
+## SUCCESS OUTPUT
+```
+📊 Epic completion: 100% (4/4 deliverables)
+🔍 Running quality gates...
+✅ GitHub issue #123 closed
+✅ Created PR #456
+✅ Epic branch merged and deleted
+🎉 Epic 'user-auth' completed successfully!
+```

@@ -1,112 +1,99 @@
-# /pm:new - Create New Epic
+# new - Create New Epic
 
-**Usage**: `/pm:new epic-name "Epic description"`
+**Usage**: `new epic-name "Epic description"`
+**Script**: `.claude/scripts/new.sh epic-name "description"`
 
-## Purpose
+## ORDERS FOR new.sh EXECUTION
 
-Initialize a new epic with automatic GitHub integration and deliverable tracking.
-
-## What It Does
-
-### 1. Epic Initialization
-- Create epic directory structure
-- Set up deliverable tracking configuration
-- Initialize git branch for epic work
-- Create GitHub issue/milestone
-
-### 2. Automatic Setup
+### STEP 1: Validate Input
 ```bash
-# Directory structure created
-.claude/epics/epic-name/
-├── deliverables.json    # Tracking configuration
-├── progress.md         # Progress documentation
-└── decisions.md        # Architecture decisions
-
-# Git branch created
-git checkout -b feature/epic-name
+# Validate epic name format: lowercase, numbers, hyphens only
+[[ "$epic_name" =~ ^[a-z0-9-]+$ ]] || exit 1
+# Check epic doesn't already exist
+[[ ! -d ".claude/epics/$epic_name" ]] || exit 1
 ```
 
-### 3. GitHub Integration
-- Create GitHub issue with epic description
-- Link to project milestone
-- Set up auto-tracking labels
-- Initialize progress tracking
+### STEP 2: Check GitHub Authentication
+```bash
+# Verify GitHub CLI is authenticated
+gh auth status || exit 1
+# Get repository info from git remote
+repository=$(git remote get-url origin | sed 's|.*github.com[/:]||; s|\.git$||')
+```
 
-## Configuration
-
-### Deliverables Definition
-```json
+### STEP 3: Create Epic Directory Structure
+```bash
+mkdir -p ".claude/epics/$epic_name"
+cat > ".claude/epics/$epic_name/deliverables.json" << EOF
 {
-  "epic": "epic-name",
-  "description": "Epic description",
+  "epic": "$epic_name",
+  "description": "$description",
   "deliverables": [
     {
-      "type": "component",
+      "type": "implementation",
       "pattern": "src/components/EpicComponent.vue",
       "required": true,
-      "description": "Main epic component"
-    },
-    {
-      "type": "page",
-      "pattern": "src/pages/epic-page.astro",
-      "required": true,
-      "description": "Epic landing page"
-    },
-    {
-      "type": "test",
-      "pattern": "tests/epic.test.js",
-      "required": true,
-      "description": "Test coverage"
-    },
-    {
-      "type": "documentation",
-      "pattern": "docs/epic-guide.md",
-      "required": false,
-      "description": "User documentation"
+      "description": "Main epic implementation"
     }
   ],
   "github_issue": null,
-  "repository": "owner/repo-name",
+  "repository": "$repository",
   "auto_sync_enabled": true
 }
+EOF
 ```
 
-### Integration Points
-- **Supermemory**: Store epic decisions and patterns
-- **GitHub API**: Issue and milestone management
-- **Git hooks**: Auto-sync progress on commits
-- **Serena**: Track deliverable files
-
-## Example Usage
-
+### STEP 4: Create GitHub Issue
 ```bash
-# Create new user authentication epic
-/pm:new user-auth "Implement user authentication system with JWT tokens"
-
-# Creates:
-# - .claude/epics/user-auth/ directory
-# - feature/user-auth git branch
-# - GitHub issue #123 for tracking
-# - Deliverable tracking for auth components
+# Create issue and capture issue number
+issue_number=$(gh issue create \
+  --title "Epic: $epic_name" \
+  --body "$description" \
+  --label "epic" \
+  --assignee "@me" \
+  --repo "$repository" | grep -o '#[0-9]\+' | tr -d '#')
 ```
 
-## Auto-Detection Rules
+### STEP 5: Update deliverables.json with GitHub Issue
+```bash
+# Update github_issue field with real issue number
+jq --arg issue "$issue_number" '.github_issue = ($issue | tonumber)' \
+  ".claude/epics/$epic_name/deliverables.json" > temp.json
+mv temp.json ".claude/epics/$epic_name/deliverables.json"
+```
 
-Once epic is created, progress is tracked automatically:
+### STEP 6: Create Git Branch
+```bash
+# Switch to main and update
+git checkout main
+git pull origin main
+# Create and switch to epic branch
+git checkout -b "feature/epic-$epic_name"
+```
 
-### File-Based Detection
-- Check deliverable files exist and are non-empty
-- Calculate completion percentage
-- Update GitHub issue with progress
+## RULES TO FOLLOW
 
-### Commit-Based Detection
-- Parse commit messages for completion keywords
-- Auto-update progress on each commit
-- Trigger GitHub sync through post-commit hooks
+### Auto-Sync Rules (from .claude/rules/auto-sync.md)
+- **File-based completion**: Check deliverable files exist and non-empty
+- **Post-commit hook**: Automatically triggered on every commit
+- **GitHub integration**: Issues updated automatically via post-commit hook
 
-### Completion Triggers
-- 100% deliverables complete → Create PR with auto-merge label
-- CI passes → Enable auto-merge
-- PR merged → Close epic and GitHub issue
+### Git Workflow Rules (from .claude/rules/git-workflow.md)
+- **Branch naming**: `feature/epic-$epic_name`
+- **Commit messages**: Include issue number for auto-linking
+- **Auto-merge**: Triggered when deliverables 100% complete
 
-**Zero manual commands after `/pm:new`. Everything else happens automatically through git workflow.**
+## ERROR HANDLING
+- Exit with code 1 on any validation failure
+- Print clear error messages to stderr
+- Never leave epic in partially created state
+
+## SUCCESS OUTPUT
+```
+✅ Epic '$epic_name' created successfully!
+📁 Directory: .claude/epics/$epic_name
+🔗 GitHub Issue: #$issue_number
+🌿 Branch: feature/epic-$epic_name
+
+Next: Start implementing deliverables
+```
