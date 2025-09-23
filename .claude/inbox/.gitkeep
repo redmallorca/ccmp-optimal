@@ -1,0 +1,11 @@
+# Inbox Directory for External GitHub Issues
+
+This directory stores external issues and PRs detected by the GitHub sync system.
+
+## Files created by the system:
+- external-issues.jsonl - External issues database
+- sync-state.json - Sync state per repository
+
+## Usage:
+1. Run `/pm:sync` to detect external issues
+2. Use `/pm:inbox` to review and manage detected issues
