@@ -1,0 +1,51 @@
+{
+  "epic": "github-integration",
+  "description": "Simple polling-based GitHub Issues integration for detecting external issues/PRs without webhooks complexity",
+  "deliverables": [
+    {
+      "type": "script",
+      "pattern": ".claude/scripts/github-sync.sh",
+      "required": true,
+      "description": "Core GitHub API polling script with ETag efficiency"
+    },
+    {
+      "type": "command",
+      "pattern": ".claude/commands/sync.md",
+      "required": true,
+      "description": "Documentation for /pm:sync command"
+    },
+    {
+      "type": "command",
+      "pattern": ".claude/commands/inbox.md",
+      "required": true,
+      "description": "Documentation for /pm:inbox command"
+    },
+    {
+      "type": "script",
+      "pattern": ".claude/scripts/inbox-manager.sh",
+      "required": true,
+      "description": "Inbox management for external issues adoption"
+    },
+    {
+      "type": "config",
+      "pattern": ".claude/inbox/.gitkeep",
+      "required": true,
+      "description": "Inbox directory structure for external issues"
+    },
+    {
+      "type": "test",
+      "pattern": ".claude/scripts/ci/test-github-sync.sh",
+      "required": true,
+      "description": "Test script for GitHub sync functionality"
+    },
+    {
+      "type": "documentation",
+      "pattern": ".claude/epics/github-integration/decisions.md",
+      "required": false,
+      "description": "Architecture decisions and consensus rationale"
+    }
+  ],
+  "github_issue": null,
+  "repository": "redmallorca/ccpm-optimal",
+  "auto_sync_enabled": true
+}
