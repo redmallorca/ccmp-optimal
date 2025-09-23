@@ -86,8 +86,8 @@
 Choose the appropriate specialists based on your project's technology stack:
 
 #### **Frontend Options** (choose one):
-- **frontend-daisyui-specialist**: Astro + DaisyUI + Alpine.js for static sites
-- **frontend-primevue-specialist**: Vue 3 + PrimeVue + Inertia.js for full-stack apps
+- **frontend-daisyui-specialist**: Astro + Vite + DaisyUI  for static sites
+- **frontend-primevue-specialist**: Vite + Vue 3 + PrimeVue for full-stack apps
 
 #### **Backend Options** (choose one or multiple):
 - **laravel-specialist**: Laravel 11+ with DDD, Repository Pattern, Pest testing

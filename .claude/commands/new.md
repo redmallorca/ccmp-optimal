@@ -65,11 +65,9 @@ git checkout -b feature/epic-name
       "description": "User documentation"
     }
   ],
-  "github": {
-    "issue_number": null,
-    "milestone_id": null,
-    "auto_close": true
-  }
+  "github_issue": null,
+  "repository": "owner/repo-name",
+  "auto_sync_enabled": true
 }
 ```
 

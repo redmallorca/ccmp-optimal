@@ -278,7 +278,7 @@ update_github_issue() {
     # Get GitHub issue number from deliverables config
     local issue_number=""
     if command -v jq &> /dev/null && [[ -f "$deliverables_file" ]]; then
-        issue_number=$(jq -r '.github.issue_number // empty' "$deliverables_file")
+        issue_number=$(jq -r '.github_issue // empty' "$deliverables_file")
     fi
 
     if [[ -z "$issue_number" || "$issue_number" == "null" ]]; then
