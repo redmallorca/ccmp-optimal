@@ -45,7 +45,7 @@
       "description": "Architecture decisions and consensus rationale"
     }
   ],
-  "github_issue": null,
+  "github_issue": 3,
   "repository": "redmallorca/ccpm-optimal",
   "auto_sync_enabled": true
 }
