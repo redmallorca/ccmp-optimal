@@ -1,0 +1,47 @@
+{
+  "epic": "fix-ci",
+  "description": "Fix CI pipeline to work with shell script-based CCPM project",
+  "deliverables": [
+    {
+      "type": "workflow",
+      "pattern": ".github/workflows/shell-quality-gates.yml",
+      "required": true,
+      "description": "Shell script-based CI workflow replacing Node.js workflow"
+    },
+    {
+      "type": "script",
+      "pattern": ".claude/scripts/ci/lint.sh",
+      "required": true,
+      "description": "Shell script linting (shellcheck)"
+    },
+    {
+      "type": "script",
+      "pattern": ".claude/scripts/ci/test.sh",
+      "required": true,
+      "description": "Test runner for shell scripts"
+    },
+    {
+      "type": "script",
+      "pattern": ".claude/scripts/ci/build.sh",
+      "required": true,
+      "description": "Build validation script"
+    },
+    {
+      "type": "config",
+      "pattern": ".shellcheckrc",
+      "required": true,
+      "description": "Shellcheck configuration"
+    },
+    {
+      "type": "documentation",
+      "pattern": ".claude/epics/fix-ci/decisions.md",
+      "required": false,
+      "description": "Architecture decisions for CI fixes"
+    }
+  ],
+  "github": {
+    "issue_number": null,
+    "milestone_id": null,
+    "auto_close": true
+  }
+}
