@@ -17,7 +17,7 @@ cd your-project
 ### 2. Create Your First Epic
 ```bash
 # Only command you'll ever need to remember
-/pm:new user-auth "Implement user authentication system"
+/new user-auth "Implement user authentication system"
 ```
 
 ### 3. Code Normally
@@ -36,7 +36,7 @@ git push
 
 ## 🎯 Core Philosophy
 
-**Zero commands after `/pm:new`**. Everything happens automatically through your normal git workflow.
+**Zero commands after `/new`**. Everything happens automatically through your normal git workflow.
 
 ### What CCPM Does Automatically
 - ✅ **Progress Tracking**: File-based completion detection
@@ -46,7 +46,7 @@ git push
 - ✅ **CI/CD Integration**: GitHub Actions with simplified testing
 
 ### What You Do
-1. `/pm:new epic-name "description"` (once per epic)
+1. `/new epic-name "description"` (once per epic)
 2. Code and commit normally
 3. Push when ready
 4. **Done!** 🎉
@@ -77,11 +77,11 @@ git push
 ### 5 Core Commands
 ```
 .claude/commands/
-├── new.md      # /pm:new - Create epic (only manual command)
-├── start.md    # /pm:start - Load context for existing epic
-├── status.md   # /pm:status - Check progress (no automation)
-├── sync.md     # /pm:sync - Force GitHub sync if needed
-└── close.md    # /pm:close - Archive completed epic
+├── new.md      # /new - Create epic (only manual command)
+├── start.md    # /start - Load context for existing epic
+├── status.md   # /status - Check progress (no automation)
+├── sync.md     # /sync - Force GitHub sync if needed
+└── close.md    # /close - Archive completed epic
 ```
 
 ### Auto-Sync Engine
@@ -140,7 +140,7 @@ git push
 ### Epic Lifecycle
 ```bash
 # 1. Create epic (only manual command)
-/pm:new bike-gallery "Interactive bike photo gallery"
+/new bike-gallery "Interactive bike photo gallery"
 
 # 2. CCMP creates:
 # - .claude/epics/bike-gallery/deliverables.json
@@ -204,37 +204,11 @@ git commit -m "emergency: disable auto-merge"
 ### Manual Sync Recovery
 ```bash
 # If auto-sync fails
-/pm:sync epic-name --force
+/sync epic-name --force
 
 # Check auto-sync logs
 tail -f .claude/logs/auto-sync.log
 ```
-
-## 🆚 vs Original CCPM
-
-### Original CCPM Problems
-- ❌ **38 commands** (overwhelming complexity)
-- ❌ **4,812 lines** of documentation
-- ❌ **Manual dependency** breaking automation
-- ❌ **Git worktree confusion** instead of standard branches
-- ❌ **Missing epic-sync.sh** (critical automation gap)
-- ❌ **Complex test-runner** blocking GitHub CI
-
-### CCPM Optimal Solutions
-- ✅ **5 commands** (90% reduction)
-- ✅ **Zero-command automation** after setup
-- ✅ **Standard git workflow** (main/stable/feature branches)
-- ✅ **PR-based workflow** with auto-merge
-- ✅ **Simplified CI/CD** that works with GitHub Actions
-- ✅ **Complete automation engine** with git hooks
-
-## 📈 Success Metrics
-
-- **Commands**: 38 → 5 (87% reduction)
-- **Documentation**: 4,812 → 800 lines (83% reduction)
-- **Manual Steps**: 90% → 5% automation
-- **Context Usage**: Optimized for preferred tools
-- **CI Compatibility**: GitHub Actions native
 
 ## 🤝 Contributing
 

@@ -1,9 +1,10 @@
-# [PROJECT] - Claude Code Project Management (CCPM)
+# [PROJECT] - [YOUR PROJECT NAME]
 
 **Repository**: https://github.com/YOUR_ORG/YOUR_PROJECT.git
-**Stack**: Modern CI/CD • GitHub Actions • Auto-Merge • Zero-Command PM
+**Stack**: [YOUR TECH STACK] • CCPM Auto-Sync • GitHub Actions • Zero-Command PM
 
-> We're colleagues working together. Simple, maintainable solutions over clever complexity.
+> ABOUTME: [Brief description of your project - 2 lines max]
+> ABOUTME: [Additional context about the project purpose and scope]
 
 ### Our Collaboration Style
 
@@ -48,7 +49,7 @@
 
 ### **Simplified Testing**
 
-- **Standard Tools**: npm test, npm run lint, npm run build
+- **Standard Tools**: [npm test|cargo test|pytest|composer test], [npm run lint], [npm run build]
 - **GitHub Actions**: Standard CI, no complex test abstractions
 - **Progressive Gates**: lint → test → build → auto-merge
 - **Real Data**: No mocks, test with actual data
@@ -69,65 +70,28 @@
 5. **Supermemory synced** with decisions
 6. **GitHub issue** auto-closed
 
-## 🤖 **Sub-Agents for Context Optimization**
+## 🤖 **Active Specialists for this Project**
 
-### **Core Analysis Agents**
-- **file-analyzer**: Extract key info from logs, configs, verbose files
-- **code-analyzer**: Code analysis, bug tracing, logic flow investigation
-- **simple-tester**: Basic test execution (replaces complex test-runner)
+[INSTRUCTIONS: Choose the appropriate specialists based on your project's technology stack]
 
-### **Specialized Agents**
-- **project-manager**: Epic planning, deliverable tracking, auto-sync coordination
-- **devops-specialist**: Docker, containers, CI/CD, deployment automation
-- **performance-specialist**: Core Web Vitals, optimization, monitoring
-- **security-specialist**: Vulnerability scanning, secure coding practices
+### **Frontend Projects**
+- ✅ **frontend-daisyui-specialist**: Astro + DaisyUI + Alpine.js for static sites
+- ✅ **frontend-primevue-specialist**: Vue 3 + PrimeVue + Inertia.js for full-stack apps
 
-### **Tech Stack Specialists** (Configure per project)
-Choose the appropriate specialists based on your project's technology stack:
+### **Backend Projects**
+- ✅ **laravel-specialist**: Laravel 11+ with DDD, Repository Pattern, Pest testing
+- ✅ **backend-specialist**: API development and service architecture
 
-#### **Frontend Options** (choose one):
-- **frontend-daisyui-specialist**: Astro + Vite + DaisyUI  for static sites
-- **frontend-primevue-specialist**: Vite + Vue 3 + PrimeVue for full-stack apps
+### **Core Specialists** (Always include)
+- ✅ **project-manager**: Epic planning, deliverable tracking, auto-sync coordination
+- ✅ **devops-specialist**: Docker, containers, CI/CD, deployment automation
+- ✅ **performance-specialist**: Optimization and monitoring
+- ✅ **security-specialist**: Security review and best practices
+- ✅ **simple-tester**: Test execution and quality assurance
 
-#### **Backend Options** (choose one or multiple):
-- **laravel-specialist**: Laravel 11+ with DDD, Repository Pattern, Pest testing
-
-### **Project Configuration Examples**
-
-#### **Astro + DaisyUI Static Site** (e.g., Marketing site, Documentation)
-```markdown
-## 🤖 Active Specialists for this Project
-- ✅ **frontend-daisyui-specialist**: Astro + DaisyUI + Alpine.js
-- ✅ **devops-specialist**: Docker deployment and CI/CD
-- ✅ **performance-specialist**: Core Web Vitals optimization
-- ✅ **security-specialist**: Static site security best practices
-- ❌ frontend-primevue-specialist (not needed)
-- ❌ laravel-specialist (static site, no backend)
-```
-
-#### **Laravel + Vue Inertia Full-Stack App** (e.g., SaaS, Admin panel)
-```markdown
-## 🤖 Active Specialists for this Project
-- ✅ **frontend-primevue-specialist**: Vue 3 + PrimeVue + Inertia.js
-- ✅ **laravel-specialist**: Laravel 11+ with DDD patterns
-- ✅ **devops-specialist**: Docker deployment and CI/CD
-- ✅ **performance-specialist**: Full-stack optimization
-- ✅ **security-specialist**: Web application security
-- ❌ frontend-daisyui-specialist (using Vue, not Astro)
-```
-
-#### **Pure Laravel API** (e.g., Mobile app backend, API service)
-```markdown
-## 🤖 Active Specialists for this Project
-- ✅ **laravel-specialist**: Laravel 11+ API with DDD
-- ✅ **devops-specialist**: API deployment and CI/CD
-- ✅ **performance-specialist**: API performance optimization
-- ✅ **security-specialist**: API security and authentication
-- ❌ frontend-daisyui-specialist (API only, no frontend)
-- ❌ frontend-primevue-specialist (API only, no frontend)
-```
-
-**Note**: Add your project's configuration to this CLAUDE.md file so AI agents know which specialists are available.
+### **Specialized Agents** (Optional)
+- ✅ **code-analyzer**: Bug tracing, code analysis with Serena tools
+- ✅ **file-analyzer**: Extract info from logs, configs, verbose files
 
 ## 🔄 **CCPM Auto-Workflow**
 
@@ -143,16 +107,28 @@ Choose the appropriate specialists based on your project's technology stack:
 ```
 
 ### **Manual Override Commands** (rarely needed)
-- `/pm:new <epic>` - Create new epic with auto-sync setup
-- `/pm:status` - View project dashboard
-- `/pm:sync` - Manual sync override for troubleshooting
-- `/pm:close <epic>` - Force complete epic
+- `/new <epic-name> "description"` - Create new epic with auto-sync setup
+- `/start <epic-name>` - Load context for existing epic
+- `/status [epic-name]` - View project dashboard (all epics or specific)
+- `/sync [epic-name]` - Manual sync override for troubleshooting
+- `/close <epic-name>` - Complete and archive epic
+- `/overview` - Show project status and health
 
 ### **Deliverable Auto-Detection**
-- **File-based**: Specific files created/modified trigger completion
-- **Test-based**: CI success indicates deliverable completion
-- **Commit-based**: Commit messages with completion keywords
-- **PR-based**: Merged PRs auto-close linked issues
+File patterns configured in `.claude/config.json`:
+```json
+{
+  "deliverables": {
+    "patterns": [
+      "src/components/*.{vue,astro,tsx,jsx}",
+      "src/pages/*.{astro,tsx}",
+      "src/services/*.{js,ts}",
+      "tests/**/*.test.{js,ts}",
+      "docs/*.md"
+    ]
+  }
+}
+```
 
 ## 🔧 **Memory Integration**
 
@@ -169,15 +145,68 @@ Choose the appropriate specialists based on your project's technology stack:
 
 ---
 
-## 📋 **Project Setup Checklist**
+## 📋 **CCPM Installation Checklist**
 
-- [ ] Copy this CLAUDE.md to project root
-- [ ] **Configure active specialists**: Add project-specific agent configuration section
-- [ ] Setup GitHub Actions CI workflow
-- [ ] Configure branch protection (main/stable)
-- [ ] Install CCPM hooks: `npm run ccpm:init`
-- [ ] Test auto-sync: make commit, verify PR creation
-- [ ] Configure Supermemory integration
-- [ ] Setup auto-merge rules
+### **Initial Setup**
+- [ ] **Copy CCPM template**: `cp -r ccpm-optimal/.claude your-project/`
+- [ ] **Copy this file**: `cp ccpm-optimal/.claude/CLAUDE-TEMPLATE.md your-project/CLAUDE.md`
+- [ ] **Customize CLAUDE.md**: Update project name, repository, tech stack, specialists
+- [ ] **Update deliverable patterns**: Edit `.claude/config.json` for your file structure
 
-**Last Updated**: $(date)
+### **GitHub Integration**
+- [ ] **Setup GitHub CLI**: `gh auth login`
+- [ ] **Configure branch protection**: Protect main/stable branches on GitHub
+- [ ] **Setup GitHub Actions**: Copy CI workflow from template
+- [ ] **Enable auto-merge**: Configure auto-merge rules
+
+### **CCPM Activation**
+- [ ] **Install hooks**: `./.claude/scripts/install-hooks.sh`
+- [ ] **Test auto-sync**: Create test commit, verify automation
+- [ ] **Create first epic**: `/new test-epic "Test epic for validation"`
+- [ ] **Verify workflow**: Complete epic, check PR creation and auto-merge
+
+### **Configuration Customization**
+- [ ] **Update file patterns**: Edit `.claude/config.json` deliverable patterns
+- [ ] **Configure quality gates**: Enable/disable lint, test, build in config
+- [ ] **Setup Supermemory**: Configure project integration if available
+
+---
+
+## 🚀 **Quick Start Example**
+
+### **1. Install CCPM**
+```bash
+# Copy CCPM to your project
+cp -r ccpm-optimal/.claude your-project/
+cp ccpm-optimal/.claude/CLAUDE-TEMPLATE.md your-project/CLAUDE.md
+cd your-project
+
+# Install automation
+./.claude/scripts/install-hooks.sh
+```
+
+### **2. Customize Configuration**
+```bash
+# Edit CLAUDE.md - update project details and active specialists
+# Edit .claude/config.json - update deliverable patterns for your project structure
+```
+
+### **3. Create First Epic**
+```bash
+# Only manual command you'll ever need
+/new user-auth "Implement user authentication system"
+
+# Code normally - everything else is automatic
+git add src/components/LoginForm.vue
+git commit -m "feat(auth): add login form component"
+# 🤖 Auto-sync: Updates GitHub issue progress
+
+git add tests/auth.test.js
+git commit -m "test(auth): add login form tests"
+# 🤖 Auto-sync: Epic complete → Creates PR → Auto-merge when CI passes
+```
+
+### **4. Zero Commands Forever**
+After setup, just code and commit normally. CCPM handles all project management automatically.
+
+**Template Version**: 2024-09-24

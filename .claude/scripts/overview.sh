@@ -12,11 +12,11 @@ echo "============================================="
 echo ""
 
 # Project name from CLAUDE.md
-project_name=$(grep -E "^# \[PROJECT\]" CLAUDE.md | sed 's/# \[PROJECT\] - //' | head -1 2>/dev/null || echo "Unknown Project")
+project_name=$(grep -E "^# \[PROJECT\]" .claude/CLAUDE.md | sed 's/# \[PROJECT\] - //' | head -1 2>/dev/null || echo "Unknown Project")
 echo "📂 PROJECT: ${project_name}"
 
 # Technology stack from CLAUDE.md
-tech_stack=$(grep -A 5 "Stack" CLAUDE.md | head -1 | sed 's/\*\*Stack\*\*: //' 2>/dev/null || echo "Not specified")
+tech_stack=$(grep -A 5 "Stack" .claude/CLAUDE.md | head -1 | sed 's/\*\*Stack\*\*: //' 2>/dev/null || echo "Not specified")
 echo "🏗️ TECH STACK: ${tech_stack}"
 
 # Current git status
@@ -42,8 +42,8 @@ echo ""
 echo "🤖 ACTIVE SPECIALISTS:"
 
 # Extract specialists from CLAUDE.md
-if grep -q "Active Specialists" CLAUDE.md; then
-  grep -A 20 "Active Specialists" CLAUDE.md | grep "✅" | while read -r line; do
+if grep -q "Active Specialists" .claude/CLAUDE.md; then
+  grep -A 20 "Active Specialists" .claude/CLAUDE.md | grep "✅" | while read -r line; do
     echo "$line"
   done
 else
@@ -92,10 +92,10 @@ echo ""
 echo "📚 KNOWLEDGE BASE:"
 
 # Check CLAUDE.md
-if [[ -f "CLAUDE.md" ]]; then
-  echo "- Project configuration: ✅ Available (CLAUDE.md)"
+if [[ -f ".claude/CLAUDE.md" ]]; then
+  echo "- Project configuration: ✅ Available (.claude/CLAUDE.md)"
 else
-  echo "- Project configuration: ❌ Missing (CLAUDE.md)"
+  echo "- Project configuration: ❌ Missing (.claude/CLAUDE.md)"
 fi
 
 # Check Serena memories

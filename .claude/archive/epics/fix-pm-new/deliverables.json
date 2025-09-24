@@ -27,7 +27,7 @@
       "description": "Solution documentation and prevention measures"
     }
   ],
-  "github_issue": null,
+  "github_issue": 4,
   "repository": "redmallorca/ccmp-optimal",
   "auto_sync_enabled": true
 }
