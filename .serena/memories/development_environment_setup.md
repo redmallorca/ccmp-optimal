@@ -1,157 +1,270 @@
-# Development Environment Setup
+# CCPM Optimal - Development Environment Setup
 
-## System Requirements
+## Prerequisites (macOS/Darwin)
 
-### Required Tools
-- **Git** - Version control (pre-installed on macOS)
-- **Bash** - Shell scripting (pre-installed on macOS)
-- **GitHub CLI** (`gh`) - GitHub integration ✅ Available at `/opt/homebrew/bin/gh`
-
-### Optional Tools (Graceful Degradation)
-- **Docker** - Containerization ✅ Available at `/usr/local/bin/docker`
-- **Node.js** - Frontend development ✅ Available at `/opt/homebrew/bin/node`
-- **npm** - Package management ✅ Available at `/opt/homebrew/bin/npm`
-
-## Current Environment Status
-- **Platform**: Darwin (macOS) 24.6.0
-- **Git Repository**: ✅ Initialized and healthy
-- **GitHub CLI**: ✅ Available (authentication may be required)
-- **Docker**: ✅ Available and can run commands
-- **Node.js/npm**: ✅ Available for frontend projects
-
-## Initial Setup Commands
-
-### 1. CCPM System Setup
+### 1. Core Dependencies
 ```bash
-# Copy CCMP template to your project (if needed)
-cp -r ccpm-optimal/* your-project/
-cd your-project
+# Git (usually pre-installed on macOS)
+git --version  # Should be 2.30+
 
-# Install automation hooks (one-time setup)
+# GitHub CLI (required for automation)
+brew install gh
+gh auth login  # Required for CCPM integration
+
+# jq for JSON parsing in scripts
+brew install jq
+
+# Node.js and npm (for frontend projects)
+brew install node@20  # Node.js 20+ recommended
+```
+
+### 2. Optional but Recommended
+```bash
+# Docker (for container support)
+brew install docker
+brew install docker-compose
+
+# Modern terminal (better debugging experience)
+brew install iterm2
+brew install oh-my-zsh
+```
+
+## CCPM Installation
+
+### 3. Template Setup (Copy to new project)
+```bash
+# Method 1: Copy template to your project
+cp -r ccmp-optimal/* your-new-project/
+cd your-new-project
+
+# Method 2: Clone and adapt
+git clone https://github.com/your-org/ccpm-optimal.git
+cd ccpm-optimal
+# Customize for your project needs
+```
+
+### 4. Initial Configuration
+```bash
+# Install git hooks (enables automation)
 ./.claude/scripts/install-hooks.sh
 
-# Verify installation
-ls .claude/scripts/hooks/
-```
-
-### 2. GitHub Integration Setup
-```bash
-# Authenticate with GitHub (required for auto-sync)
-gh auth login
-
-# Verify authentication
-gh auth status
-
-# Test GitHub API access
-gh repo view
-```
-
-### 3. Development Environment Verification
-```bash
-# Check git configuration
-git config --list | grep user
-
-# Verify project structure
-ls -la .claude/
-ls -la .github/
-
-# Check branch protection and CI setup
-gh repo view --json defaultBranch,hasIssuesEnabled
-```
-
-## Project-Specific Setup
-
-### For Frontend Projects (Optional)
-```bash
-# If package.json exists, install dependencies
-[ -f package.json ] && npm install
-
-# Check available scripts
-[ -f package.json ] && npm run --silent
-```
-
-### For Docker Projects (Optional)  
-```bash
-# Check Docker status
-docker info
-
-# If docker-compose files exist
-[ -f docker-compose.yml ] && docker-compose config
-
-# Start development environment (if configured)
-[ -f docker-compose.yml ] && docker-compose up -d
-```
-
-## Automation Setup Verification
-
-### Git Hooks Installation
-```bash
-# Check if hooks are installed
+# Verify hooks installed
 ls -la .git/hooks/
+# Should show: post-commit, pre-commit, pre-push
 
-# Verify post-commit hook
-cat .git/hooks/post-commit
+# Create logs directory
+mkdir -p .claude/logs
 
-# Verify pre-push hook  
-cat .git/hooks/pre-push
+# Verify GitHub CLI authentication
+gh auth status
 ```
 
-### GitHub Actions Configuration
+### 5. Project-Specific Setup
 ```bash
-# Check CI workflow exists
-ls -la .github/workflows/
+# Edit configuration for your project
+vim .claude/config.json
 
-# Verify quality gates configuration
-cat .github/workflows/quality-gates.yml
+# Key settings to customize:
+# - deliverables.patterns: File patterns for your tech stack
+# - github.target_branch: main/master/develop
+# - quality_gates: Which checks to enable
+# - zen_commit.critical_files: Files that trigger validation
+```
+
+## Frontend Project Setup
+
+### 6. Node.js Projects (Recommended patterns)
+```bash
+# Typical package.json scripts expected by CCPM
+{
+  "scripts": {
+    "dev": "vite dev",           # Development server
+    "build": "vite build",       # Production build
+    "lint": "eslint src/",       # Code linting
+    "lint:fix": "eslint src/ --fix",
+    "typecheck": "tsc --noEmit", # TypeScript validation
+    "test": "vitest",            # Unit tests
+    "test:e2e": "playwright test", # E2E tests
+    "format": "prettier --write src/",
+    "preview": "vite preview"
+  }
+}
+```
+
+### 7. Tech Stack Configurations
+
+#### Astro + DaisyUI (Static sites)
+```bash
+npm create astro@latest
+npm run astro add tailwind
+npm run astro add alpinejs
+
+# Install DaisyUI
+npm install -D daisyui
+```
+
+#### Vue 3 + PrimeVue (Full-stack apps)
+```bash
+npm create vue@latest
+npm install primevue primeicons
+npm install @vueuse/core
+```
+
+#### React + TypeScript
+```bash
+npx create-react-app@latest . --template typescript
+npm install -D eslint prettier @types/node
+```
+
+## Docker Environment (Optional)
+
+### 8. Container Development
+```bash
+# Use provided Docker templates
+cp .claude/templates/docker-compose.yml .
+cp .claude/templates/docker-compose.dev.yml .
+
+# Container development commands
+./.claude/scripts/container-exec.sh dev     # Start dev server
+./.claude/scripts/container-exec.sh build   # Build project
+./.claude/scripts/container-exec.sh lint    # Run linting
+./.claude/scripts/container-exec.sh test    # Run tests
+```
+
+## IDE and Editor Setup
+
+### 9. VS Code (Recommended)
+```json
+// .vscode/settings.json
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "emmet.includeLanguages": {
+    "vue": "html",
+    "astro": "html"
+  }
+}
+
+// .vscode/extensions.json  
+{
+  "recommendations": [
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint", 
+    "bradlc.vscode-tailwindcss",
+    "astro-build.astro-vscode",
+    "vue.volar"
+  ]
+}
+```
+
+### 10. Git Configuration
+```bash
+# Set up user info (required for commits)
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+
+# Optional: Set up GitHub token in git config
+git config --global github.token "your_github_token"
+
+# Verify CCPM hooks are executable
+chmod +x .git/hooks/*
+```
+
+## Project Initialization
+
+### 11. First Epic Creation
+```bash
+# Test the system with your first epic
+/new test-epic "Test epic to validate CCPM setup"
+
+# This should:
+# - Create .claude/epics/test-epic/ directory
+# - Create GitHub issue
+# - Set up feature/test-epic branch
+# - Show success message
+
+# Verify epic creation
+/status test-epic
+```
+
+### 12. Validation Checklist
+```bash
+# Verify all components work:
+✅ Git hooks installed (.git/hooks/ populated)
+✅ GitHub CLI authenticated (gh auth status)
+✅ jq available (jq --version)
+✅ Node.js setup (npm --version)
+✅ CCPM scripts executable (ls -la .claude/scripts/)
+✅ First epic created successfully
+✅ Quality gates working (npm run lint/test/build)
 ```
 
 ## Troubleshooting Common Issues
 
-### GitHub CLI Authentication
+### 13. Permission Issues
 ```bash
-# If authentication fails
+# Fix script permissions
+find .claude/scripts -name "*.sh" -exec chmod +x {} \;
+
+# Fix git hooks
+chmod +x .git/hooks/*
+```
+
+### 14. GitHub Integration Issues
+```bash
+# Re-authenticate GitHub CLI
 gh auth logout
-gh auth login --web
+gh auth login
 
-# Check current auth status
-gh auth status --show-token
+# Check repository URL format
+git remote -v
+# Should show: git@github.com:user/repo.git or https://github.com/user/repo.git
+
+# Test GitHub API access
+gh issue list
 ```
 
-### Docker Issues
+### 15. Node.js Issues
 ```bash
-# If Docker daemon not running
-open -a Docker
+# Clear npm cache
+npm cache clean --force
 
-# Check Docker status
-docker version
-docker info
+# Reinstall dependencies  
+rm -rf node_modules package-lock.json
+npm install
+
+# Check Node.js version compatibility
+node --version  # Should be 18+ or 20+
 ```
 
-### Git Hook Issues
-```bash
-# If hooks don't execute
-chmod +x .git/hooks/post-commit
-chmod +x .git/hooks/pre-push
+## Development Workflow Setup
 
-# Reinstall hooks
-./.claude/scripts/install-hooks.sh --force
+### 16. Daily Development Environment
+```bash
+# Start development session
+/start epic-name  # Load context for existing epic
+npm run dev       # Start dev server
+
+# Normal development cycle
+git add .
+git commit -m "feat(component): implement feature"
+git push
+
+# Check progress
+/status epic-name
 ```
 
-## Darwin-Specific Commands
-- **File listing**: `ls -la` (standard Unix)
-- **Find files**: `find . -name "pattern"` (standard Unix)
-- **Text search**: `grep -r "pattern" .` (standard Unix)
-- **Package management**: `brew install package` (Homebrew)
-- **Process management**: `ps aux | grep process` (standard Unix)
-
-## Ready State Verification
+### 17. Team Setup
 ```bash
-# Complete environment check
-./.claude/scripts/onboarding.sh
+# Share CCPM configuration with team
+git add .claude/config.json
+git add .claude/CLAUDE.md
+git commit -m "docs: add CCPM configuration"
 
-# Should show:
-# - Git repository: ✅ Healthy
-# - GitHub CLI: ✅ Authenticated  
-# - CCPM hooks: ✅ Installed
-# - Project structure: ✅ Valid
+# Team members setup
+./.claude/scripts/install-hooks.sh  # Each developer runs this
+gh auth login                        # Each developer needs GitHub auth
 ```

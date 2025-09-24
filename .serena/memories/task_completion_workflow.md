@@ -1,105 +1,178 @@
-# Task Completion Workflow
+# CCPM Optimal - Task Completion Workflow
 
-## Done Definition
-A task is considered complete when ALL of the following are met:
+## Overview
+CCPM Optimal uses a **zero-command automation** approach where tasks are completed through normal git workflow, with automation handling all project management tasks.
 
-1. **Tests pass** (CI green)
-2. **PR created** with auto-merge label  
-3. **CI/CD completes** successfully
-4. **Auto-merge** to main branch
-5. **Supermemory synced** with decisions
-6. **GitHub issue** auto-closed
+## Primary Workflow (Standard Development)
 
-## Automatic Completion Detection
-
-### File-Based Detection
-- Check deliverable files exist and are non-empty
-- Calculate completion percentage based on required deliverables
-- Update GitHub issue with progress automatically
-
-### Commit-Based Detection  
-- Parse commit messages for completion keywords
-- Auto-update progress on each commit
-- Trigger GitHub sync through post-commit hooks
-
-### Completion Triggers
-- **100% deliverables complete** → Create PR with auto-merge label
-- **CI passes** → Enable auto-merge
-- **PR merged** → Close epic and GitHub issue
-
-## Quality Gates (Progressive)
-
-### Level 1: Fast Quality (< 2 minutes)
+### 1. Epic Creation (One-time per epic)
 ```bash
-npm run lint          # Code linting
-npm run typecheck     # TypeScript validation
-npm run format:check  # Code formatting (non-blocking)
+# Only manual command needed
+/new epic-name "Epic description with clear requirements"
+
+# This automatically:
+# - Creates .claude/epics/epic-name/ directory structure
+# - Generates deliverables.json with pattern matching
+# - Creates GitHub issue and links it to epic
+# - Sets up feature/epic-name branch
+# - Configures auto-sync for the epic
 ```
 
-### Level 2: Core Testing (< 5 minutes)  
+### 2. Development Cycle (Automated)
 ```bash
-npm test                    # Unit tests
-npm run test:integration    # Integration tests (non-blocking)
+# Normal development workflow
+git add .
+git commit -m "feat(auth): implement login component"
+git push
+
+# Post-commit hook automatically:
+# - Analyzes commit for completion keywords
+# - Calculates epic completion percentage
+# - Updates GitHub issue with progress
+# - Creates PR when 100% complete
+# - Adds auto-merge label to PR
 ```
 
-### Level 3: Build Validation (< 8 minutes)
+### 3. Completion Detection (Automatic)
+Epic completion is detected through:
+- **File-based patterns**: Matching deliverables.json patterns
+- **Commit message keywords**: "complete", "finish", "done", "implement", "fix", "feat"
+- **Quality gate validation**: All tests pass, lint clean, build successful
+- **Branch completion**: All deliverables present and valid
+
+## Quality Gates (Automated Validation)
+
+### 4. Pre-Commit Validation
 ```bash
-npm run build              # Project build
-npm run bundle:analyze     # Bundle analysis (non-blocking)
-npm run perf:budget        # Performance budget (non-blocking)
+# Triggered by git commit (automatic)
+# - Zen validation for important commits (3+ files or critical files)
+# - Merge conflict detection
+# - Large file warnings
+# - Debug statement warnings (console.log, debugger)
+# - TODO/FIXME detection in critical files
 ```
 
-### Level 4: Extended Validation (PR only, < 15 minutes)
+### 5. Post-Commit Processing
 ```bash
-npm run test:e2e           # E2E tests
-npm run test:a11y          # Accessibility tests (non-blocking)
-npm audit --audit-level=high  # Security scan (non-blocking)
+# Triggered after every commit (automatic)
+# - Epic branch detection
+# - Progress calculation based on deliverables
+# - GitHub issue updates with completion percentage
+# - Quality status reporting (lint, test, build)
+# - Supermemory sync with decisions and progress
 ```
 
-## Manual Task Completion Commands
-
-### When Automatic Detection Fails
+### 6. CI/CD Pipeline (GitHub Actions)
 ```bash
-# Force completion status update
-/pm:sync epic-name --force
-
-# Manually close completed epic
-/pm:close epic-name
-
-# Check completion status
-/pm:status epic-name
+# Triggered by push (automatic)
+# Progressive quality gates:
+1. Lint check       (npm run lint)
+2. TypeScript check  (npm run typecheck)  
+3. Unit tests        (npm run test)
+4. Build validation  (npm run build)
+5. E2E tests         (npm run test:e2e)
+6. Auto-merge        (if all pass + auto-merge label)
 ```
 
-### Emergency Procedures
+## Completion Criteria
+
+### 7. Epic Completion Requirements
+An epic is considered complete when:
+- **All deliverables match**: Files exist and pass validation
+- **Quality gates pass**: Lint, typecheck, tests, build all successful
+- **Content validation**: Files have meaningful content (not empty stubs)
+- **Test coverage**: Required test patterns exist and pass
+
+### 8. Deliverable Validation Rules
+```json
+{
+  "deliverables": [
+    {
+      "pattern": "src/components/*.{vue,astro,tsx,jsx}",
+      "required": true,
+      "description": "Component implementation"
+    },
+    {
+      "pattern": "tests/**/*.test.{js,ts}",
+      "required": true, 
+      "description": "Test coverage"
+    }
+  ]
+}
+```
+
+File validation includes:
+- **Existence**: File must exist and be readable
+- **Size**: Must be non-empty (>0 bytes)
+- **Content**: Must have meaningful content for file type
+- **Structure**: Components must have export/template, tests must have test cases
+
+## Manual Override Commands
+
+### 9. Troubleshooting Commands
 ```bash
-# Disable auto-merge if needed
+# Check epic status
+/status epic-name
+
+# Force GitHub sync
+/sync epic-name --force  
+
+# Manual epic closure
+/close epic-name
+
+# View system status
+/overview
+```
+
+### 10. Emergency Procedures
+```bash
+# Disable auto-merge
 touch .github/auto-merge-disabled
 git commit -m "emergency: disable auto-merge"
 
-# Re-enable auto-merge
-rm .github/auto-merge-disabled
-git commit -m "fix: re-enable auto-merge"
+# Skip git hooks (bypass automation)
+git commit --no-verify -m "emergency commit"
+
+# Check automation logs
+tail -f .claude/logs/auto-sync.log
 ```
 
-## Memory and Context Preservation
+## Memory Integration Workflow
 
-### Automatic Memory Sync
-- **Supermemory**: Project decisions and architectural choices
-- **Serena**: Code patterns and component relationships  
-- **OpenMemory**: Session context and temporary decisions
+### 11. Automatic Memory Sync
+- **Epic creation**: Search Supermemory for related patterns
+- **Architecture decisions**: Auto-sync to memory when detected in commits
+- **PR merges**: Store architectural decisions and patterns  
+- **Epic completion**: Archive knowledge and patterns
+- **Error resolution**: Document solutions for future reference
 
-### Manual Memory Updates
-```bash
-# Document important decisions during development
-# This happens automatically via post-commit hooks
-# No manual intervention required
-```
+### 12. Session Context
+- **OpenMemory**: Temporary session notes and decisions
+- **Context loading**: Previous implementation patterns
+- **Decision continuity**: Reference past architectural choices
+- **Pattern reuse**: Identify similar components and solutions
 
-## Success Metrics
-- **Zero manual commands** after `/pm:new`
-- **Progressive quality gates** provide fast feedback
-- **Auto-merge** when all quality gates pass
-- **Complete audit trail** in GitHub issues and Supermemory
+## Done Definition
 
-## Key Principle
-**The system tracks completion automatically.** Focus on coding and committing - the CCPM system handles all project management, quality validation, and completion tracking through the git workflow.
+### 13. Task Considered Complete When:
+1. **All deliverable patterns match** existing files
+2. **Files pass content validation** (not empty, have structure)
+3. **Quality gates pass**: lint, typecheck, test, build
+4. **GitHub issue auto-closed** with completion comment
+5. **PR created and merged** (or ready for merge)
+6. **Memory updated** with decisions and patterns
+7. **Epic archived** to .claude/archive/ directory
+
+### 14. Automation Success Indicators
+- ✅ GitHub issue shows "🎉 Epic completed"
+- ✅ PR exists with auto-merge label
+- ✅ CI pipeline shows all green checkmarks
+- ✅ Epic directory moved to .claude/archive/
+- ✅ Branch cleanup completed (if configured)
+
+## Key Principles
+- **Zero manual PM commands** after epic creation
+- **Normal git workflow** triggers all automation
+- **Progressive quality gates** don't block development
+- **Automatic context preservation** through memory systems
+- **Fail-safe fallbacks** for when automation fails
