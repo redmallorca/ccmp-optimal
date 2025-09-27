@@ -135,3 +135,6 @@ temp-*
 test-results/
 playwright-report/
 coverage/
+
+# CCMP System Logs
+.claude/logs/

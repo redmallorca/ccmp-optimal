@@ -118,18 +118,20 @@ TBD - Will be updated automatically by auto-sync system
 ---
 *This issue was created by manual-epic-creator.sh as a workaround for broken /pm:new command*"
 
-    local issue_number
-    issue_number="$(gh issue create \
+    local issue_url
+    issue_url="$(gh issue create \
         --title "$issue_title" \
         --body "$issue_body" \
         --label "epic" \
         --assignee "@me" \
-        --repo "$repository" \
-        --json number \
-        --jq '.number')" || {
+        --repo "$repository")" || {
         echo -e "${RED}Error: Failed to create GitHub issue${NC}" >&2
         return 1
     }
+
+    # Extract issue number from URL
+    local issue_number
+    issue_number="$(echo "$issue_url" | grep -o '[0-9]\+$')"
 
     echo -e "${GREEN}✅ Created GitHub issue #$issue_number${NC}"
     echo "$issue_number"
