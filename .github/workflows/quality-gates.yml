@@ -126,7 +126,7 @@ jobs:
   # Level 4: Extended validation (PR only, < 15 minutes)
   extended-validation:
     runs-on: ubuntu-latest
-    needs: ccmp-validation
+    needs: ccpm-validation
     if: github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:
@@ -162,7 +162,7 @@ jobs:
   # Auto-merge configuration
   auto-merge:
     runs-on: ubuntu-latest
-    needs: [fast-quality, core-testing, ccmp-validation]
+    needs: [fast-quality, core-testing, ccpm-validation]
     if: |
       github.event_name == 'pull_request' &&
       contains(github.event.pull_request.labels.*.name, 'auto-merge') &&
@@ -180,20 +180,20 @@ jobs:
   # Quality monitoring and alerts
   quality-monitoring:
     runs-on: ubuntu-latest
-    needs: [fast-quality, core-testing, ccmp-validation]
+    needs: [fast-quality, core-testing, ccpm-validation]
     if: always()
     steps:
       - name: Quality gate status
         run: |
           echo "Fast Quality: ${{ needs.fast-quality.result }}"
           echo "Core Testing: ${{ needs.core-testing.result }}"
-          echo "CCPM Validation: ${{ needs.ccmp-validation.result }}"
+          echo "CCPM Validation: ${{ needs.ccpm-validation.result }}"
 
       - name: Notify on failure
         if: |
           needs.fast-quality.result == 'failure' ||
           needs.core-testing.result == 'failure' ||
-          needs.ccmp-validation.result == 'failure'
+          needs.ccpm-validation.result == 'failure'
         run: |
           echo "Quality gates failed - blocking auto-merge"
           echo "Check logs for specific failures"
@@ -222,7 +222,7 @@ jobs:
   # Performance monitoring
   performance-check:
     runs-on: ubuntu-latest
-    needs: ccmp-validation
+    needs: ccpm-validation
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout code
