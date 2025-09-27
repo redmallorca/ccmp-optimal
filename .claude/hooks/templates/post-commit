@@ -1,0 +1,83 @@
+#!/bin/bash
+#
+# Post-commit Hook - Smart Auto-Sync with Loop Protection
+# Only triggers auto-sync for meaningful commits, prevents infinite loops
+#
+
+set -e  # Don't use -u to avoid undefined variable issues
+
+# Get the directory of the git repository
+REPO_ROOT=$(git rev-parse --show-toplevel)
+LOG_FILE="$REPO_ROOT/.claude/logs/auto-sync.log"
+
+# Ensure log directory exists
+mkdir -p "$(dirname "$LOG_FILE")"
+
+# Get commit information
+COMMIT_SHA=$(git rev-parse --short HEAD)
+COMMIT_MSG=$(git log -1 --pretty=%B)
+COMMITTER=$(git config user.name 2>/dev/null || echo "Unknown")
+
+# Log the commit
+echo "[POST-COMMIT] $(date): Commit $COMMIT_SHA by $COMMITTER" >> "$LOG_FILE"
+
+# Check if this commit was made by auto-sync (avoid infinite loops)
+if echo "$COMMIT_MSG" | grep -q -i "auto.*sync\|sync.*complete\|auto-merge"; then
+    echo "[POST-COMMIT] Auto-sync commit detected - skipping to avoid loop" >> "$LOG_FILE"
+    exit 0
+fi
+
+# Check if auto-sync is already running
+AUTO_SYNC_PID_FILE="$REPO_ROOT/.claude/logs/auto-sync.pid"
+if [[ -f "$AUTO_SYNC_PID_FILE" ]]; then
+    AUTO_SYNC_PID=$(cat "$AUTO_SYNC_PID_FILE")
+    if kill -0 "$AUTO_SYNC_PID" 2>/dev/null; then
+        echo "[POST-COMMIT] Auto-sync already running (PID: $AUTO_SYNC_PID) - skipping" >> "$LOG_FILE"
+        exit 0
+    else
+        # Stale PID file, remove it
+        rm -f "$AUTO_SYNC_PID_FILE"
+    fi
+fi
+
+# Only trigger auto-sync for meaningful commits
+TRIGGER_KEYWORDS=("feat" "fix" "complete" "finish" "done" "implement" "add" "update")
+SHOULD_SYNC=false
+
+for keyword in "${TRIGGER_KEYWORDS[@]}"; do
+    if echo "$COMMIT_MSG" | grep -q -i "^$keyword\|: $keyword"; then
+        SHOULD_SYNC=true
+        echo "[POST-COMMIT] Trigger keyword '$keyword' detected in commit message" >> "$LOG_FILE"
+        break
+    fi
+done
+
+if [[ "$SHOULD_SYNC" == "false" ]]; then
+    echo "[POST-COMMIT] No trigger keywords found - skipping auto-sync" >> "$LOG_FILE"
+    exit 0
+fi
+
+# Check if auto-sync engine exists
+AUTO_SYNC_ENGINE="$REPO_ROOT/.claude/scripts/auto-sync-engine.sh"
+if [[ ! -f "$AUTO_SYNC_ENGINE" ]]; then
+    echo "[POST-COMMIT] Auto-sync engine not found: $AUTO_SYNC_ENGINE" >> "$LOG_FILE"
+    exit 0
+fi
+
+# Run auto-sync in background with PID tracking
+echo "[POST-COMMIT] Triggering auto-sync in background" >> "$LOG_FILE"
+{
+    # Store PID for tracking
+    echo $$ > "$AUTO_SYNC_PID_FILE"
+    
+    cd "$REPO_ROOT"
+    chmod +x "$AUTO_SYNC_ENGINE"
+    "$AUTO_SYNC_ENGINE" auto-sync
+    
+    # Clean up PID file when done
+    rm -f "$AUTO_SYNC_PID_FILE"
+    
+    echo "[POST-COMMIT] Auto-sync background process completed" >> "$LOG_FILE"
+} &
+
+exit 0
