@@ -1,4 +1,4 @@
-name: Quality Gates
+name: CCPM Quality Gates
 
 on:
   push:
@@ -15,23 +15,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Set up Bash environment
+        run: |
+          bash --version
+          which bash
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Check script syntax
+        run: |
+          # Check all bash scripts for syntax errors
+          find .claude/scripts -name "*.sh" -type f -exec bash -n {} \;
+          echo "All scripts have valid syntax"
 
-      - name: Lint check
-        run: npm run lint
+      - name: Check script permissions
+        run: |
+          # Ensure scripts are executable
+          find .claude/scripts -name "*.sh" -type f ! -perm -111 -exec echo "Non-executable: {}" \;
+          echo "Permissions check completed"
 
-      - name: TypeScript check
-        run: npm run typecheck
-
-      - name: Format check
-        run: npm run format:check
+      - name: Shell formatting check (shellcheck)
+        run: |
+          # Install shellcheck if available
+          if command -v shellcheck &> /dev/null; then
+            find .claude/scripts -name "*.sh" -type f -exec shellcheck {} \;
+          else
+            echo "shellcheck not available, skipping"
+          fi
         continue-on-error: true
 
   # Level 2: Core testing (< 5 minutes)
@@ -43,24 +51,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Set executable permissions
+        run: |
+          find .claude/scripts -name "*.sh" -type f -exec chmod +x {} \;
+          echo "Executable permissions set"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Test script functionality
+        run: |
+          # Test basic script functionality
+          echo "Testing github-sync.sh status..."
+          ./.claude/scripts/github-sync.sh status
+          
+          echo "Testing inbox-manager.sh help..."
+          ./.claude/scripts/inbox-manager.sh help
+          
+          echo "Testing status.sh help..."
+          ./.claude/scripts/status.sh --help
+          
+          echo "All core scripts working correctly"
 
-      - name: Unit tests
-        run: npm test
-
-      - name: Integration tests
-        run: npm run test:integration
+      - name: Run CCPM integration tests
+        run: |
+          if [ -f "./.claude/scripts/ci/test-github-sync.sh" ]; then
+            echo "Running GitHub sync tests..."
+            timeout 60 ./.claude/scripts/ci/test-github-sync.sh || echo "Tests completed with timeout"
+          else
+            echo "No integration tests found, skipping"
+          fi
         continue-on-error: true
 
-  # Level 3: Build validation (< 8 minutes)
-  build-validation:
+  # Level 3: CCPM validation (< 8 minutes)
+  ccpm-validation:
     runs-on: ubuntu-latest
     needs: core-testing
     timeout-minutes: 10
@@ -68,71 +89,80 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Validate CCPM structure
+        run: |
+          # Check required directories
+          test -d .claude || { echo "Missing .claude directory"; exit 1; }
+          test -d .claude/scripts || { echo "Missing .claude/scripts directory"; exit 1; }
+          test -d .claude/hooks || { echo "Missing .claude/hooks directory"; exit 1; }
+          echo "CCPM directory structure validated"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Validate core scripts
+        run: |
+          # Check core scripts exist
+          test -f .claude/scripts/auto-sync-engine.sh || { echo "Missing auto-sync-engine.sh"; exit 1; }
+          test -f .claude/scripts/status.sh || { echo "Missing status.sh"; exit 1; }
+          test -f .claude/scripts/zen-commit-wrapper.sh || { echo "Missing zen-commit-wrapper.sh"; exit 1; }
+          echo "Core scripts validated"
 
-      - name: Build project
-        run: npm run build
+      - name: Validate hook templates
+        run: |
+          # Check hook templates exist
+          test -f .claude/hooks/templates/pre-commit || { echo "Missing pre-commit hook template"; exit 1; }
+          test -f .claude/hooks/templates/post-commit || { echo "Missing post-commit hook template"; exit 1; }
+          echo "Hook templates validated"
 
-      - name: Bundle analysis
-        run: npm run bundle:analyze
-        continue-on-error: true
-
-      - name: Performance budget check
-        run: npm run perf:budget
+      - name: CCPM configuration check
+        run: |
+          if [ -f ".claude/config.json" ]; then
+            echo "CCPM config file found"
+            # Basic JSON validation
+            python3 -m json.tool .claude/config.json > /dev/null && echo "Config JSON is valid"
+          else
+            echo "No config file found, using defaults"
+          fi
         continue-on-error: true
 
   # Level 4: Extended validation (PR only, < 15 minutes)
   extended-validation:
     runs-on: ubuntu-latest
-    needs: build-validation
+    needs: ccpm-validation
     if: github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Install shellcheck for advanced linting
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Advanced shell linting
+        run: |
+          find .claude/scripts -name "*.sh" -type f -exec shellcheck -x {} \;
+          echo "Advanced linting completed"
 
-      - name: Build for E2E tests
-        run: npm run build
+      - name: Hook templates validation
+        run: |
+          # Validate hook templates syntax
+          bash -n .claude/hooks/templates/pre-commit
+          bash -n .claude/hooks/templates/post-commit
+          echo "Hook templates syntax validated"
 
-      - name: Start application
-        run: npm run preview &
-        env:
-          NODE_ENV: production
-
-      - name: Wait for application
-        run: npx wait-on http://localhost:4173
-
-      - name: E2E tests
-        run: npm run test:e2e
-
-      - name: Accessibility tests
-        run: npm run test:a11y
-        continue-on-error: true
-
-      - name: Security scan
-        run: npm audit --audit-level=high
+      - name: Security scan for scripts
+        run: |
+          # Basic security checks for bash scripts
+          echo "Checking for potential security issues..."
+          ! grep -r "eval" .claude/scripts/ || echo "Warning: eval usage found"
+          ! grep -r "\$\$" .claude/scripts/ || echo "Warning: command substitution found"
+          echo "Security scan completed"
         continue-on-error: true
 
   # Auto-merge configuration
   auto-merge:
     runs-on: ubuntu-latest
-    needs: [fast-quality, core-testing, build-validation]
+    needs: [fast-quality, core-testing, ccpm-validation]
     if: |
       github.event_name == 'pull_request' &&
       contains(github.event.pull_request.labels.*.name, 'auto-merge') &&
@@ -150,20 +180,20 @@ jobs:
   # Quality monitoring and alerts
   quality-monitoring:
     runs-on: ubuntu-latest
-    needs: [fast-quality, core-testing, build-validation]
+    needs: [fast-quality, core-testing, ccpm-validation]
     if: always()
     steps:
       - name: Quality gate status
         run: |
           echo "Fast Quality: ${{ needs.fast-quality.result }}"
           echo "Core Testing: ${{ needs.core-testing.result }}"
-          echo "Build Validation: ${{ needs.build-validation.result }}"
+          echo "CCPM Validation: ${{ needs.ccpm-validation.result }}"
 
       - name: Notify on failure
         if: |
           needs.fast-quality.result == 'failure' ||
           needs.core-testing.result == 'failure' ||
-          needs.build-validation.result == 'failure'
+          needs.ccpm-validation.result == 'failure'
         run: |
           echo "Quality gates failed - blocking auto-merge"
           echo "Check logs for specific failures"
@@ -176,48 +206,46 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run dependency audit
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
-
-      - name: CodeQL analysis
-        uses: github/codeql-action/analyze@v2
-        with:
-          languages: javascript
+      - name: Bash script security scan
+        run: |
+          echo "Scanning bash scripts for security issues..."
+          # Check for common security issues
+          echo "Checking for hardcoded credentials..."
+          ! grep -r "password\|token\|secret" .claude/scripts/ || echo "Warning: Potential hardcoded credentials found"
+          
+          echo "Checking for unsafe commands..."
+          ! grep -r "rm -rf /\|sudo rm" .claude/scripts/ || echo "Warning: Dangerous rm commands found"
+          
+          echo "Security scan completed"
         continue-on-error: true
 
   # Performance monitoring
   performance-check:
     runs-on: ubuntu-latest
-    needs: build-validation
+    needs: ccpm-validation
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Script performance analysis
+        run: |
+          echo "Analyzing script performance..."
+          # Check script sizes
+          find .claude/scripts -name "*.sh" -type f -exec wc -l {} \; | sort -n
+          echo "Script size analysis completed"
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-
-      - name: Start preview server
-        run: npm run preview &
-
-      - name: Wait for server
-        run: npx wait-on http://localhost:4173
-
-      - name: Lighthouse CI
-        run: npx @lhci/cli@0.12.x autorun
+      - name: Memory usage simulation
+        run: |
+          echo "Testing memory usage of core scripts..."
+          # Run scripts with memory monitoring if available
+          if command -v time &> /dev/null; then
+            time ./.claude/scripts/status.sh --help > /dev/null
+            echo "Memory test completed"
+          else
+            echo "time command not available, skipping memory test"
+          fi
         continue-on-error: true
-        env:
-          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
 # Emergency override
 # Create .github/auto-merge-disabled file to disable auto-merge

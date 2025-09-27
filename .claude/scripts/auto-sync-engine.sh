@@ -60,8 +60,10 @@ error() {
 get_current_epic() {
     local branch=$(git rev-parse --abbrev-ref HEAD)
 
-    # Extract epic name from branch (feature/epic-name -> epic-name)
-    if [[ "$branch" =~ ^feature/(.+)$ ]]; then
+    # Extract epic name from branch (feature/epic-name -> name)
+    if [[ "$branch" =~ ^feature/epic-(.+)$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+    elif [[ "$branch" =~ ^feature/(.+)$ ]]; then
         echo "${BASH_REMATCH[1]}"
     elif [[ "$branch" =~ ^epic/(.+)$ ]]; then
         echo "${BASH_REMATCH[1]}"
@@ -316,11 +318,24 @@ _Auto-updated by CCPM system_"
             error "Failed to update GitHub issue #$issue_number"
         }
 
-        # Close issue if 100% complete
+        # Close issue if 100% complete AND quality gates pass
         if [[ "$completion_percent" -eq 100 ]]; then
-            gh issue close "$issue_number" --comment "🎉 Epic completed! All deliverables implemented and merged." || {
-                error "Failed to close GitHub issue #$issue_number"
-            }
+            if quality_gates_pass; then
+                gh issue close "$issue_number" --comment "🎉 Epic completed! All deliverables implemented and quality gates passed." || {
+                    error "Failed to close GitHub issue #$issue_number"
+                }
+            else
+                log "Epic $epic_name at 100% but quality gates failing - keeping issue open"
+                gh issue comment "$issue_number" --body "⚠️ **Epic at 100% but quality gates failing**
+
+All deliverables are complete but quality validation failed. Issue remains open until quality gates pass.
+
+$(get_quality_status)
+
+Fix the failing quality checks and commit again to re-trigger validation." || {
+                    error "Failed to add quality gate warning to GitHub issue #$issue_number"
+                }
+            fi
         fi
     else
         log "GitHub CLI not available, skipping issue update"
@@ -392,6 +407,44 @@ get_quality_status() {
     echo -e "$status"
 }
 
+# Check if all quality gates pass (returns 0 if all pass, 1 if any fail)
+quality_gates_pass() {
+    local exec_cmd=""
+    if [[ -f ".claude/scripts/container-exec.sh" ]]; then
+        exec_cmd=".claude/scripts/container-exec.sh exec"
+    fi
+
+    # Check lint
+    if [[ -n "$exec_cmd" ]]; then
+        $exec_cmd "npm run lint" &> /dev/null || return 1
+    else
+        npm run lint --silent &> /dev/null || return 1
+    fi
+
+    # Check TypeScript
+    if [[ -n "$exec_cmd" ]]; then
+        $exec_cmd "npm run typecheck" &> /dev/null || return 1
+    else
+        npm run typecheck --silent &> /dev/null || return 1
+    fi
+
+    # Check tests
+    if [[ -n "$exec_cmd" ]]; then
+        $exec_cmd "npm test" &> /dev/null || return 1
+    else
+        npm test --silent &> /dev/null || return 1
+    fi
+
+    # Check build
+    if [[ -n "$exec_cmd" ]]; then
+        $exec_cmd "npm run build" &> /dev/null || return 1
+    else
+        npm run build --silent &> /dev/null || return 1
+    fi
+
+    return 0
+}
+
 # Get next steps based on completion percentage
 get_next_steps() {
     local completion_percent="$1"
@@ -418,8 +471,14 @@ create_pr_if_ready() {
         return
     fi
 
-    # Check if PR already exists
+    # Push branch to remote if not already there
     local branch=$(git rev-parse --abbrev-ref HEAD)
+    log "Pushing branch $branch to remote"
+    git push -u origin "$branch" 2>/dev/null || {
+        log "Branch already exists on remote or push failed"
+    }
+
+    # Check if PR already exists
     if command -v gh &> /dev/null; then
         local existing_pr=$(gh pr list --head "$branch" --json number --jq '.[0].number // empty')
         if [[ -n "$existing_pr" ]]; then
@@ -485,6 +544,13 @@ auto_sync() {
     fi
 
     log "Auto-sync triggered for epic: $epic_name"
+
+    # Sync local changes to remote branch
+    local branch=$(git rev-parse --abbrev-ref HEAD)
+    log "Syncing branch $branch to remote"
+    git push -u origin "$branch" 2>/dev/null || {
+        log "Failed to push or branch already up to date"
+    }
 
     # Calculate completion
     local completion_percent=$(calculate_completion "$epic_name")
