@@ -1,0 +1,64 @@
+#!/bin/bash
+# ABOUTME: Pre-commit hook with Zen validation
+# Executes zen-commit-wrapper with timeout protection
+
+set -e
+
+# Configuration
+REPO_ROOT=$(git rev-parse --show-toplevel)
+LOG_FILE="$REPO_ROOT/.claude/logs/auto-sync.log"
+ZEN_WRAPPER="$REPO_ROOT/.claude/scripts/zen-commit-wrapper.sh"
+MAX_VALIDATION_TIME=10
+
+# Ensure log directory exists
+mkdir -p "$(dirname "$LOG_FILE")"
+
+# Log start
+echo "[PRE-COMMIT] $(date): Starting Zen validation..." >> "$LOG_FILE"
+
+# Get staged files
+staged_files=$(git diff --cached --name-only 2>/dev/null || true)
+
+if [[ -z "$staged_files" ]]; then
+    echo "[PRE-COMMIT] No staged files - allowing commit" >> "$LOG_FILE"
+    exit 0
+fi
+
+# Timeout wrapper
+run_with_timeout() {
+    local timeout_duration=$1
+    shift
+    
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "${timeout_duration}s" "$@"
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "${timeout_duration}s" "$@"
+    else
+        "$@"  # No timeout available, just run
+    fi
+}
+
+# Execute Zen validation if wrapper exists
+if [[ -f "$ZEN_WRAPPER" ]] && [[ -x "$ZEN_WRAPPER" ]]; then
+    echo "🧠 Running Zen commit validation (max ${MAX_VALIDATION_TIME}s)..."
+    echo "[PRE-COMMIT] Executing zen-commit-wrapper" >> "$LOG_FILE"
+    
+    if run_with_timeout "$MAX_VALIDATION_TIME" "$ZEN_WRAPPER"; then
+        echo "[PRE-COMMIT] Zen validation passed" >> "$LOG_FILE"
+        exit 0
+    else
+        exit_code=$?
+        if [[ $exit_code -eq 124 ]]; then
+            echo "⚠️  Validation timed out after ${MAX_VALIDATION_TIME}s - allowing commit"
+            echo "[PRE-COMMIT] Zen validation timed out - allowing commit" >> "$LOG_FILE"
+            exit 0
+        else
+            echo "[PRE-COMMIT] Zen validation failed - blocking commit" >> "$LOG_FILE"
+            exit 1
+        fi
+    fi
+else
+    echo "⚠️  Zen wrapper not found or not executable: $ZEN_WRAPPER"
+    echo "[PRE-COMMIT] Zen wrapper missing - skipping validation" >> "$LOG_FILE"
+    exit 0
+fi

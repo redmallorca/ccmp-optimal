@@ -37,7 +37,7 @@ FEATURES:
 EOF
 }
 
-# Calculate completion percentage
+# Calculate completion using same logic as auto-sync-engine
 calculate_completion() {
     local epic_dir="$1"
     local deliverables_file="$epic_dir/deliverables.json"
@@ -47,21 +47,32 @@ calculate_completion() {
         return
     fi
 
-    local total_deliverables=$(jq -r '.deliverables | length' "$deliverables_file" 2>/dev/null || echo "0")
-    if [[ "$total_deliverables" -eq 0 ]]; then
-        echo "0"
-        return
+    # Use the same validation logic as auto-sync-engine
+    local total_required=0
+    local completed_required=0
+
+    if command -v jq &> /dev/null; then
+        while IFS= read -r deliverable; do
+            local pattern=$(echo "$deliverable" | jq -r '.pattern')
+            local required=$(echo "$deliverable" | jq -r '.required')
+
+            if [[ "$required" == "true" ]]; then
+                ((total_required++))
+
+                # Check if file exists and has meaningful content
+                if [[ -f "$PROJECT_ROOT/$pattern" && -s "$PROJECT_ROOT/$pattern" ]]; then
+                    ((completed_required++))
+                fi
+            fi
+        done < <(jq -c '.deliverables[]' "$deliverables_file")
     fi
 
-    local completed=0
-    while IFS= read -r pattern; do
-        if [[ -f "$PROJECT_ROOT/$pattern" && -s "$PROJECT_ROOT/$pattern" ]]; then
-            ((completed++))
-        fi
-    done < <(jq -r '.deliverables[].pattern' "$deliverables_file" 2>/dev/null || echo "")
+    local completion_percent=0
+    if [[ $total_required -gt 0 ]]; then
+        completion_percent=$((completed_required * 100 / total_required))
+    fi
 
-    local percentage=$((completed * 100 / total_deliverables))
-    echo "$percentage"
+    echo "$completion_percent"
 }
 
 # Show single epic status
