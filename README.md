@@ -45,6 +45,12 @@ git push
 - ✅ **Memory Sync**: Context preservation in Supermemory/OpenMemory
 - ✅ **CI/CD Integration**: GitHub Actions with simplified testing
 
+### 🆕 Enhanced Features (Optional)
+- ✨ **Intelligent Comments**: No-spam GitHub issue updates (updateable comments)
+- 🎯 **Deliverable Tracking**: Smart detection of which files actually changed
+- 🔄 **Enhanced Auto-sync**: Better logging, error handling, and reliability
+- 📝 **GitHub Templates**: Issue and PR templates for consistent workflow
+
 ### What You Do
 1. `/new epic-name "description"` (once per epic)
 2. Code and commit normally
@@ -191,6 +197,44 @@ git push origin feature/bike-gallery
 # Required for GitHub integration
 gh auth login
 ```
+
+### 🆕 Enhanced Features Configuration
+To enable the new intelligent features, add these optional configurations:
+
+```json
+{
+  "auto_sync": {
+    "enabled": true,
+    "github_integration": true,
+    "supermemory_integration": true,
+    "intelligent_comments": {
+      "enabled": true,
+      "update_existing": true,
+      "include_deliverable_changes": true,
+      "pr_issue_linking": true
+    },
+    "deliverable_tracking": {
+      "enabled": true,
+      "change_detection": true,
+      "commit_analysis": true
+    }
+  },
+  "github": {
+    "auto_merge": true,
+    "target_branch": "main",
+    "issue_management": {
+      "auto_update_comments": true,
+      "milestone_comments": true,
+      "pr_issue_linking": true
+    }
+  }
+}
+```
+
+**Benefits:**
+- **intelligent_comments**: Eliminates comment spam by updating existing comments instead of creating new ones
+- **deliverable_tracking**: Only triggers GitHub updates when actual deliverables change
+- **Enhanced error handling**: Better logging and fallback mechanisms
 
 ## 🚨 Emergency Procedures
 
