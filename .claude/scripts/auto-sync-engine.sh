@@ -27,6 +27,8 @@ load_config() {
             QUALITY_GATES_BUILD=$(jq -r '.quality_gates.build' "$CONFIG_FILE" 2>/dev/null || echo "true")
             AUTO_MERGE_ENABLED=$(jq -r '.github.auto_merge' "$CONFIG_FILE" 2>/dev/null || echo "true")
             TARGET_BRANCH=$(jq -r '.github.target_branch' "$CONFIG_FILE" 2>/dev/null || echo "main")
+            INTELLIGENT_COMMENTS=$(jq -r '.auto_sync.intelligent_comments.enabled' "$CONFIG_FILE" 2>/dev/null || echo "false")
+            DELIVERABLE_TRACKING=$(jq -r '.auto_sync.deliverable_tracking.enabled' "$CONFIG_FILE" 2>/dev/null || echo "false")
         else
             log "Warning: jq not found, using default configuration"
             DELIVERABLE_PATTERNS=""
@@ -35,6 +37,8 @@ load_config() {
             QUALITY_GATES_BUILD="true"
             AUTO_MERGE_ENABLED="true"
             TARGET_BRANCH="main"
+            INTELLIGENT_COMMENTS="false"
+            DELIVERABLE_TRACKING="false"
         fi
     else
         log "Warning: config.json not found, using default configuration"
@@ -44,6 +48,8 @@ load_config() {
         QUALITY_GATES_BUILD="true"
         AUTO_MERGE_ENABLED="true"
         TARGET_BRANCH="main"
+        INTELLIGENT_COMMENTS="false"
+        DELIVERABLE_TRACKING="false"
     fi
 }
 
@@ -314,9 +320,20 @@ _Auto-updated by CCPM system_"
     # Post GitHub comment using gh CLI
     if command -v gh &> /dev/null; then
         log "Updating GitHub issue #$issue_number (${completion_percent}% complete)"
-        gh issue comment "$issue_number" --body "$comment_body" || {
-            error "Failed to update GitHub issue #$issue_number"
-        }
+
+        # Use intelligent comment manager if enabled
+        if [[ "$INTELLIGENT_COMMENTS" == "true" ]] && [[ -x "$CCPM_DIR/scripts/github-comment-manager.sh" ]]; then
+            "$CCPM_DIR/scripts/github-comment-manager.sh" --update "$issue_number" "$comment_body" || {
+                log "Intelligent comment update failed, falling back to regular comment"
+                gh issue comment "$issue_number" --body "$comment_body" || {
+                    error "Failed to update GitHub issue #$issue_number"
+                }
+            }
+        else
+            gh issue comment "$issue_number" --body "$comment_body" || {
+                error "Failed to update GitHub issue #$issue_number"
+            }
+        fi
 
         # Close issue if 100% complete AND quality gates pass
         if [[ "$completion_percent" -eq 100 ]]; then

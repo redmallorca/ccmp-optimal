@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: CCPM Documentation
+    url: https://github.com/redmallorca/ccmp-optimal/blob/main/README.md
+    about: Check the documentation for setup and usage instructions

@@ -2,7 +2,21 @@
   "auto_sync": {
     "enabled": true,
     "github_integration": true,
-    "supermemory_integration": true
+    "supermemory_integration": true,
+    "intelligent_comments": {
+      "enabled": false,
+      "update_existing": true,
+      "include_deliverable_changes": true,
+      "pr_issue_linking": true,
+      "change_detection": "deliverable_based",
+      "comment_format": "structured"
+    },
+    "deliverable_tracking": {
+      "enabled": false,
+      "change_detection": true,
+      "commit_analysis": true,
+      "history_retention": 10
+    }
   },
   "zen_commit": {
     "enabled": true,
@@ -39,6 +53,17 @@
   "github": {
     "auto_merge": true,
     "require_ci": true,
-    "target_branch": "main"
+    "target_branch": "main",
+    "issue_management": {
+      "auto_update_comments": false,
+      "comment_update_marker": "_Auto-updated by CCPM system_",
+      "milestone_comments": true,
+      "pr_issue_linking": true
+    },
+    "templates": {
+      "epic_issue": ".github/ISSUE_TEMPLATE/epic.md",
+      "epic_pr": ".github/PULL_REQUEST_TEMPLATE/epic-completion.md",
+      "standard_pr": ".github/pull_request_template.md"
+    }
   }
 }
